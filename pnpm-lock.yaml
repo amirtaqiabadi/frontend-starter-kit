@@ -17,6 +17,9 @@ importers:
       cn:
         specifier: ^0.5.0
         version: 0.5.0
+      iran-bank-card:
+        specifier: github:amirtaqiabadi/iran-bank-card
+        version: https://codeload.github.com/amirtaqiabadi/iran-bank-card/tar.gz/df3c12bc050f8c1ca4178dfa32dd3f19cc6d2eec
       lucide-react:
         specifier: ^1.63.0
         version: 1.63.0(@types/react@19.3.0)(react@19.3.1)
@@ -2439,6 +2442,11 @@ packages:
   ip-address@10.7.5:
     resolution: {integrity: sha512-t2v0rkILYv9WXmSL7TpAaU3HXgaFYOPUcH3QHgwQ++gpJuH3bqyMy4Fvt/DJCTKwzH3Cf+bAp5W/mFL39KPLzA==}
     engines: {node: '>= 12'}
+
+  iran-bank-card@https://codeload.github.com/amirtaqiabadi/iran-bank-card/tar.gz/df3c12bc050f8c1ca4178dfa32dd3f19cc6d2eec:
+    resolution: {gitHosted: true, integrity: sha512-eKDfpmbaeZSbpZ8K8EgXFgH2HmvUT5lJMnHuuKnOADwA+JF6jrcur640TH/xbBP0bK1/zVqCJ3K2IQLJlPW52Q==, tarball: https://codeload.github.com/amirtaqiabadi/iran-bank-card/tar.gz/df3c12bc050f8c1ca4178dfa32dd3f19cc6d2eec}
+    version: 1.0.0
+    engines: {node: '>=18'}
 
   is-array-buffer@3.0.5:
     resolution: {integrity: sha512-DDfANUiiG2wC1qawP66qlTugJeL5HyzMpfr8lLK+jMQirGzNod0B12cFB/9q838Ru27sBwfw78/rdoU7RERz6A==}
@@ -6167,6 +6175,8 @@ snapshots:
       side-channel: 1.1.1
 
   ip-address@10.7.5: {}
+
+  iran-bank-card@https://codeload.github.com/amirtaqiabadi/iran-bank-card/tar.gz/df3c12bc050f8c1ca4178dfa32dd3f19cc6d2eec: {}
 
   is-array-buffer@3.0.5:
     dependencies:

@@ -5,3 +5,5 @@ allowBuilds:
   unrs-resolver: true
   msw: false
   esbuild: true
+  # pnpm keys git dependencies by the fetched tarball, not the package name.
+  "iran-bank-card@https://codeload.github.com/amirtaqiabadi/iran-bank-card/tar.gz/df3c12bc050f8c1ca4178dfa32dd3f19cc6d2eec": true

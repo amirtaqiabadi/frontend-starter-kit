@@ -44,12 +44,8 @@ import {
   type AccountProfile,
   type AccountTransaction,
 } from "@/features/account/account-store"
-import {
-  cardCaretIndex,
-  cardDigits,
-  CARD_LENGTH,
-  formatCardInput,
-} from "@/features/account/card"
+import { cardDigits, CARD_LENGTH } from "@/features/account/card"
+import { CardNumberField } from "@/features/account/card-number-field"
 import { TransactionAmount } from "@/features/account/transaction-amount"
 
 const fieldClassName = "h-11 text-base"
@@ -570,7 +566,7 @@ function WalletSection({
                     setNotice("")
                   }}
                 />
-                <CardField
+                <CardNumberField
                   value={cardNumber}
                   error={cardError}
                   onChange={(value) => {
@@ -675,50 +671,6 @@ function TomanField({
           تومان
         </span>
       </div>
-    </FormField>
-  )
-}
-
-function CardField({
-  value,
-  error,
-  onChange,
-}: {
-  value: string
-  error: string
-  onChange: (value: string) => void
-}) {
-  const describedBy = error ? "card-number-error" : undefined
-
-  function onCardChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const input = event.target
-    const caret = input.selectionStart ?? input.value.length
-    const digitsBeforeCaret = toAsciiDigits(
-      input.value.slice(0, caret)
-    ).replace(/\D/g, "").length
-    const next = formatCardInput(input.value)
-    onChange(next)
-    const nextCaret = cardCaretIndex(next, digitsBeforeCaret)
-    window.requestAnimationFrame(() => {
-      input.setSelectionRange(nextCaret, nextCaret)
-    })
-  }
-
-  return (
-    <FormField id="card-number" label="شماره کارت" error={error}>
-      <Input
-        id="card-number"
-        name="cc-number"
-        className={fieldClassName}
-        dir="ltr"
-        inputMode="numeric"
-        autoComplete="cc-number"
-        value={value}
-        aria-invalid={Boolean(error) || undefined}
-        aria-describedby={describedBy}
-        placeholder="۶۰۳۷ ۹۹۱۹ ۱۲۳۴ ۵۶۷۸"
-        onChange={onCardChange}
-      />
     </FormField>
   )
 }
