@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import Link from "next/link"
-import { LoaderCircleIcon, UserIcon } from "lucide-react"
+import { LoaderCircleIcon } from "lucide-react"
 
+import { AvatarUploader } from "@/components/organisms/avatar-uploader/avatar-uploader"
 import { FormField } from "@/components/molecules/form-field"
 import { Button } from "@/components/ui/button"
 import {
@@ -49,8 +50,26 @@ import { CardNumberField } from "@/features/account/card-number-field"
 import { TransactionAmount } from "@/features/account/transaction-amount"
 
 const fieldClassName = "h-11 text-base"
-const MAX_AVATAR_BYTES = 350 * 1024
 const MAX_NAME_LENGTH = 60
+
+/** Reads the optimized WebP into the data URL stored on the account. */
+function readOptimizedAvatar(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : ""
+      if (!result.startsWith("data:image/webp") || result.includes('"')) {
+        reject(new Error("invalid avatar"))
+        return
+      }
+      resolve(result)
+    }
+    reader.onerror = () => {
+      reject(new Error("invalid avatar"))
+    }
+    reader.readAsDataURL(file)
+  })
+}
 
 type AccountPanelProps = {
   initialAccount?: AccountProfile | null
@@ -186,7 +205,6 @@ function ProfileForm({
   account: AccountProfile
   onAccountChange: (next: AccountProfile) => void
 }) {
-  const fileRef = useRef<HTMLInputElement>(null)
   const [name, setName] = useState(account.name)
   const [avatarDataUrl, setAvatarDataUrl] = useState(account.avatarDataUrl)
   const [error, setError] = useState("")
@@ -194,39 +212,16 @@ function ProfileForm({
   const [pending, setPending] = useState(false)
   useBlockUnload(pending)
 
-  function onAvatarChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    event.target.value = ""
-    if (!file) {
-      return
-    }
-
-    if (!file.type.startsWith("image/")) {
-      setError("فقط تصویر مجاز است.")
-      setNotice("")
-      return
-    }
-
-    if (file.size > MAX_AVATAR_BYTES) {
-      setError("حجم تصویر باید کمتر از ۳۵۰ کیلوبایت باشد.")
-      setNotice("")
-      return
-    }
-
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : ""
-      if (!result.startsWith("data:image/") || result.includes('"')) {
-        setError("فقط تصویر مجاز است.")
+  function onOptimizedAvatar(file: File) {
+    void readOptimizedAvatar(file).then(
+      (nextAvatar) => {
+        setAvatarDataUrl(nextAvatar)
         setNotice("")
-        return
+      },
+      () => {
+        setNotice("")
       }
-
-      setAvatarDataUrl(result)
-      setError("")
-      setNotice("")
-    }
-    reader.readAsDataURL(file)
+    )
   }
 
   function saveProfile(event: React.FormEvent<HTMLFormElement>) {
@@ -266,57 +261,16 @@ function ProfileForm({
       </CardHeader>
       <form onSubmit={saveProfile}>
         <CardContent className="flex flex-col gap-4">
-          <div className="flex items-center gap-4">
-            <div
-              role="img"
-              aria-label={avatarLabel}
-              className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted bg-cover bg-center"
-              style={
-                avatarDataUrl.startsWith("data:image/")
-                  ? { backgroundImage: `url("${avatarDataUrl}")` }
-                  : undefined
-              }
-            >
-              {avatarDataUrl.startsWith("data:image/") ? null : (
-                <UserIcon className="text-muted-foreground" aria-hidden />
-              )}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <input
-                ref={fileRef}
-                id="avatar"
-                name="avatar"
-                type="file"
-                accept="image/*"
-                aria-label="تصویر حساب"
-                className="sr-only"
-                onChange={onAvatarChange}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                className="h-11"
-                disabled={pending}
-                onClick={() => fileRef.current?.click()}
-              >
-                {avatarDataUrl ? "تغییر تصویر" : "افزودن تصویر"}
-              </Button>
-              {avatarDataUrl ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="h-11"
-                  disabled={pending}
-                  onClick={() => {
-                    setAvatarDataUrl("")
-                    setNotice("")
-                  }}
-                >
-                  حذف تصویر
-                </Button>
-              ) : null}
-            </div>
-          </div>
+          <AvatarUploader
+            value={avatarDataUrl}
+            imageLabel={avatarLabel}
+            disabled={pending}
+            onChange={onOptimizedAvatar}
+            onRemove={() => {
+              setAvatarDataUrl("")
+              setNotice("")
+            }}
+          />
           <FormField id="name" label="نام" error={error}>
             <Input
               id="name"
