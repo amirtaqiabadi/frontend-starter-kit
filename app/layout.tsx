@@ -1,15 +1,25 @@
-import { Geist, Geist_Mono } from "next/font/google"
+import type { Metadata } from "next"
+
+import { ThemeProvider } from "@/components/theme-provider"
+import { DirectionProvider } from "@/components/ui/direction"
+import { TooltipProvider } from "@/components/ui/tooltip"
+import { fontMono, fontSans } from "@/lib/fonts"
+import { cn } from "@/lib/utils"
 
 import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
-import { cn } from "@/lib/utils";
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'})
-
-const fontMono = Geist_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
-})
+export const metadata: Metadata = {
+  title: {
+    default: "پایه فرانت‌اند",
+    template: "%s | پایه فرانت‌اند",
+  },
+  description: "شروع پروژه با shadcn، راست‌به‌چپ و Storybook",
+  openGraph: {
+    locale: "fa_IR",
+    type: "website",
+    siteName: "پایه فرانت‌اند",
+  },
+}
 
 export default function RootLayout({
   children,
@@ -18,12 +28,22 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="fa"
+      dir="rtl"
       suppressHydrationWarning
-      className={cn("antialiased", fontMono.variable, "font-sans", geist.variable)}
+      className={cn(
+        "antialiased",
+        fontSans.variable,
+        fontMono.variable,
+        "font-sans"
+      )}
     >
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <DirectionProvider direction="rtl">
+          <ThemeProvider>
+            <TooltipProvider>{children}</TooltipProvider>
+          </ThemeProvider>
+        </DirectionProvider>
       </body>
     </html>
   )

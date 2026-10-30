@@ -1,0 +1,79 @@
+---
+description: Frontend development rules for RTL, mobile, SEO, localization, and data handling
+alwaysApply: true
+---
+
+# Frontend Project Rules (React/Next.js)
+
+## Design & UI
+
+- RTL-first UI. Official shadcn RTL only: `components.json` has `rtl: true` and style `base-nova`. Add components with `pnpm dlx shadcn@latest add`. Do not fake RTL with CSS direction alone.
+- Document: `lang="fa"` and `dir="rtl"`, wrapped in `DirectionProvider`.
+- Logical classes (`start`/`end`, `ms`/`me`, `ps`/`pe`, `text-start`). The CLI converts physical classes when `rtl: true`.
+- Portals: `DialogContent`, `DropdownMenuContent`, `SelectContent`, and `TooltipContent` set `dir` from `useDirection()`.
+- Directional icons: `DirectionalIcon`, or `className="rtl:rotate-180"` on Arrow/Caret icons.
+- Use design system components ONLY. shadcn primitives stay in `components/ui`; do not copy them into atoms.
+- Dependency direction: `ui` ← atoms ← molecules ← organisms ← templates ← features ← `app`. Lower layers must not import higher layers.
+- Missing component → ASK: update base or local override
+- Any component change → update the colocated Storybook story
+- See `docs/rtl-shadcn.md` for RTL conventions and manual exceptions
+
+## Mobile
+
+- Mobile-first: style the small screen first, then add `sm` and `lg` enhancements.
+- Mobile-friendly: no horizontal overflow, at least 44px for primary tap targets, and 16px input text so mobile browsers do not zoom on focus.
+- Phone and OTP fields use `inputMode`, `autoComplete` (`tel`, `one-time-code`), and `dir="ltr"` for the value.
+
+## SEO
+
+- Every route has a unique `title` and `description`.
+- One `h1` per page. Use semantic `header`, `nav`, and `main`.
+- Navigation is a crawlable `Link` or `<a>`, not a click handler alone.
+- Keep public copy in server-rendered HTML.
+
+## Localization
+
+- **Date:** Jalali calendar, week starts Saturday
+- **Time:** UTC in server/DB (source of truth). Never trust client time. Display in Tehran timezone.
+- **Currency:** Store in Rial (IRR). Display in Toman (÷10). Always group amount digits in threes.
+
+## Architecture
+
+- **Principles:** Clean Code, Clean Architecture, SRP, High Cohesion, Loose Coupling, DRY (highest priority), KISS, YAGNI. Apply OCP only for real change axes.
+- **Client tolerant:** Env variations (browser/device/network). Graceful degradation, defensive checks. Fail gracefully, never break UI.
+- **API: Tolerant Reader** — Needed fields only; ignore extras; tolerate missing optional. No strict schema.
+
+**Functions/Components:**
+
+- Fail fast + early return
+- One abstraction level per function/component
+- Max 3 parameters (use objects if more)
+- Explicit default values
+- Small, focused, mind-sized
+- Short comment per function
+- Clear, intention-revealing names
+
+**Component Design:**
+
+- Easy to remove (no ripple effects)
+- Getter/setter for complex state encapsulation
+- Single abstraction level
+
+**Cohesion:**
+
+- Functional cohesion for business logic
+- Allow sequential/communicational/procedural/temporal for: component composition, state transforms, API/hooks, useEffect/lifecycle
+- Avoid over-engineering
+
+**AI Rule:** Minimize Cost of Change. If unsure about abstraction → ASK first.
+
+## Prevent Duplicate Requests
+
+- **Disable + loader:** Block clicks during active requests
+- **Debounce/throttle:** Limit rapid triggers
+- **Navigation guard:** Warn or block refresh/nav during processing
+- **Visual feedback:** Progress/success indicators
+- **Idempotency key (optional):** For sensitive APIs (e.g. payments); store per op, reuse on retry
+- **Retry:** Only with same idempotency key if used. Combine with server-side idempotency when required.
+
+**Violation → STOP & ASK**
