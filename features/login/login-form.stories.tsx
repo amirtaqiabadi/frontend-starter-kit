@@ -29,9 +29,30 @@ export const Pattern: Story = {
   },
 }
 
+export const Password: Story = {
+  args: {
+    initialStep: "password",
+    initialPhone: "09123456789",
+  },
+}
+
 export const Otp: Story = {
   args: {
     initialStep: "otp",
+    initialPhone: "09123456789",
+  },
+}
+
+export const SetPassword: Story = {
+  args: {
+    initialStep: "set-password",
+    initialPhone: "09123456789",
+  },
+}
+
+export const ResetPassword: Story = {
+  args: {
+    initialStep: "reset-password",
     initialPhone: "09123456789",
   },
 }

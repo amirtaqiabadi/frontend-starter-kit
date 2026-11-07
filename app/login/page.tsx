@@ -6,16 +6,22 @@ import { LoginForm } from "@/features/login/login-form"
 export const metadata: Metadata = {
   title: "ورود",
   description:
-    "با شماره موبایل وارد شوید. پس از ثبت شماره، کد یک‌بارمصرف از شما خواسته می‌شود.",
+    "با شماره موبایل وارد شوید. اگر رمز ثبت کرده باشید همان را می‌پرسیم؛ وگرنه کد یک‌بارمصرف می‌فرستیم.",
   openGraph: {
     title: "ورود",
     description:
-      "با شماره موبایل وارد شوید. پس از ثبت شماره، کد یک‌بارمصرف از شما خواسته می‌شود.",
+      "با شماره موبایل وارد شوید. اگر رمز ثبت کرده باشید همان را می‌پرسیم؛ وگرنه کد یک‌بارمصرف می‌فرستیم.",
     locale: "fa_IR",
   },
 }
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string | string[] }>
+}) {
+  const { next } = await searchParams
+
   return (
     <main className="mx-auto flex min-h-svh w-full max-w-md flex-col justify-center gap-6 px-4 py-8">
       <div className="flex flex-col gap-2">
@@ -24,10 +30,11 @@ export default function LoginPage() {
         </Link>
         <h1 className="text-2xl font-medium">ورود</h1>
         <p className="text-sm text-muted-foreground">
-          شماره موبایل خود را وارد کنید. در گام بعد کد یک‌بارمصرف را می‌پرسیم.
+          شماره موبایل خود را وارد کنید. اگر رمز داشته باشید همان را می‌پرسیم؛
+          وگرنه کد پیامکی می‌فرستیم.
         </p>
       </div>
-      <LoginForm />
+      <LoginForm next={typeof next === "string" ? next : undefined} />
     </main>
   )
 }

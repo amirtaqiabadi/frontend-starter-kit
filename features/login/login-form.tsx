@@ -1,157 +1,208 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import {
+  useEffect,
+  useState,
+  type ChangeEvent,
+  type Dispatch,
+  type FormEvent,
+  type SetStateAction,
+} from "react"
 import { useRouter } from "next/navigation"
-import { LoaderCircleIcon } from "lucide-react"
 
-import { FormField } from "@/components/molecules/form-field"
-import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { signInAccount } from "@/features/account/account-store"
-import { requestLoginOtp, verifyLoginOtp } from "@/features/login/login-api"
 import {
-  OTP_LENGTH,
-  RESEND_SECONDS,
-  formatIranMobile,
+  formatLoginError,
+  identifyAccount,
+  isLoginApiError,
+  loginWithPassword,
+  requestOtp,
+  resetPassword as submitResetPassword,
+  setPassword as submitSetPassword,
+  verifyOtp,
+  type OtpPurpose,
+} from "@/features/login/login-api"
+import {
+  OtpStep,
+  PasswordCreateStep,
+  PasswordStep,
+  PhoneStep,
+} from "@/features/login/login-steps"
+import { passwordError, passwordLengthError } from "@/features/login/password"
+import {
   formatMobileInput,
-  MOBILE_INPUT_MAX,
   mobileCaretIndex,
   normalizeIranMobile,
   normalizeOtp,
+  OTP_LENGTH,
   toAsciiDigits,
 } from "@/features/login/phone"
+import { safeRedirectPath } from "@/features/login/redirect-path"
 
-type LoginStep = "phone" | "otp"
+export type LoginStep =
+  "phone" | "password" | "otp" | "set-password" | "reset-password"
 
 type LoginFormProps = {
   initialStep?: LoginStep
   initialPhone?: string
+  next?: string
 }
 
-const fieldClassName = "h-11 text-base"
-
-/** Two-step mobile login: phone number, then a one-time code. */
+/** Phone login against the auth API: identify, password or OTP, then optional set/reset. */
 export function LoginForm({
   initialStep = "phone",
   initialPhone = "",
+  next,
 }: LoginFormProps) {
   const router = useRouter()
+  const redirectTo = safeRedirectPath(next)
   const [step, setStep] = useState<LoginStep>(initialStep)
   const [phone, setPhone] = useState(() => formatMobileInput(initialPhone))
   const [otp, setOtp] = useState("")
+  const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [pending, setPending] = useState(false)
   const [resendIn, setResendIn] = useState(0)
+  const [lockIn, setLockIn] = useState(0)
+  const [devCode, setDevCode] = useState("")
+  const [otpPurpose, setOtpPurpose] = useState<OtpPurpose>(
+    initialStep === "reset-password" ? "RESET_PASSWORD" : "LOGIN"
+  )
+  const [pendingRedirect, setPendingRedirect] = useState(redirectTo)
 
-  useEffect(() => {
-    if (!pending) {
-      return
-    }
+  useBlockUnload(pending)
+  useCountdown(resendIn, setResendIn)
+  useCountdown(lockIn, setLockIn)
 
-    function blockUnload(event: BeforeUnloadEvent) {
-      event.preventDefault()
-    }
-
-    window.addEventListener("beforeunload", blockUnload)
-    return () => window.removeEventListener("beforeunload", blockUnload)
-  }, [pending])
-
-  useEffect(() => {
-    if (resendIn <= 0) {
-      return
-    }
-
-    const timer = window.setTimeout(() => {
-      setResendIn((current) => current - 1)
-    }, 1000)
-
-    return () => window.clearTimeout(timer)
-  }, [resendIn])
-
-  async function submitPhone(event: React.FormEvent<HTMLFormElement>) {
+  async function submitPhone(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (pending) {
+    const phoneNumber = readPhone()
+    if (!phoneNumber || pending) {
       return
     }
 
-    const normalized = normalizeIranMobile(phone)
-    if (!normalized) {
-      setError("شماره موبایل را با ۰۹ و ۱۱ رقم وارد کنید.")
-      return
-    }
+    await runRequest(async () => {
+      const identified = await identifyAccount(phoneNumber)
+      if (identified.nextStep === "PASSWORD") {
+        setPassword("")
+        setStep("password")
+        return
+      }
 
-    setPending(true)
-    setError("")
-
-    try {
-      await requestLoginOtp(normalized)
-      setPhone(formatMobileInput(normalized))
-      setOtp("")
-      setStep("otp")
-      setResendIn(RESEND_SECONDS)
-    } catch {
-      setError("ارسال کد انجام نشد. دوباره تلاش کنید.")
-    } finally {
-      setPending(false)
-    }
+      await sendOtp(phoneNumber, "LOGIN")
+    })
   }
 
-  async function submitOtp(event: React.FormEvent<HTMLFormElement>) {
+  async function submitPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (pending) {
+    const phoneNumber = readPhone()
+    if (!phoneNumber || pending) {
       return
     }
 
+    const issue = passwordLengthError(password)
+    if (issue) {
+      setError(issue)
+      return
+    }
+
+    await runRequest(async () => {
+      const result = await loginWithPassword({
+        phoneNumber,
+        password,
+        next: redirectTo,
+      })
+      finishLogin(result.redirectTo)
+    })
+  }
+
+  async function submitOtp(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const phoneNumber = readPhone()
     const code = normalizeOtp(otp)
+    if (!phoneNumber || pending) {
+      return
+    }
+
     if (code.length !== OTP_LENGTH) {
       setError(`کد ${OTP_LENGTH} رقمی را کامل وارد کنید.`)
       return
     }
 
-    const normalized = normalizeIranMobile(phone)
-    if (!normalized) {
-      setError("شماره موبایل معتبر نیست.")
+    await runRequest(async () => {
+      const result = await verifyOtp({
+        phoneNumber,
+        code,
+        purpose: otpPurpose,
+        next: redirectTo,
+      })
+      setPendingRedirect(result.redirectTo)
+      setPassword("")
+
+      if (otpPurpose === "RESET_PASSWORD") {
+        setStep("reset-password")
+        return
+      }
+
+      if (!result.hasPassword) {
+        setStep("set-password")
+        return
+      }
+
+      finishLogin(result.redirectTo)
+    })
+  }
+
+  async function submitNewPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (pending) {
       return
     }
 
-    setPending(true)
-    setError("")
-
-    try {
-      await verifyLoginOtp({ phone: normalized, code })
-      signInAccount(normalized)
-      router.push("/account")
-    } catch {
-      setError("تأیید کد انجام نشد. دوباره تلاش کنید.")
-    } finally {
-      setPending(false)
+    const issue = passwordError(password)
+    if (issue) {
+      setError(issue)
+      return
     }
+
+    await runRequest(async () => {
+      if (step === "reset-password") {
+        await submitResetPassword(password)
+      } else {
+        await submitSetPassword(password)
+      }
+      finishLogin(pendingRedirect)
+    })
   }
 
   async function resendCode() {
-    if (pending || resendIn > 0) {
+    const phoneNumber = readPhone()
+    if (!phoneNumber || pending || resendIn > 0) {
       return
     }
 
-    setPending(true)
-    setError("")
+    await runRequest(async () => {
+      await sendOtp(phoneNumber, otpPurpose)
+    })
+  }
 
-    try {
-      await requestLoginOtp(normalizeIranMobile(phone))
-      setResendIn(RESEND_SECONDS)
-    } catch {
-      setError("ارسال دوباره کد انجام نشد.")
-    } finally {
-      setPending(false)
+  async function forgotPassword() {
+    const phoneNumber = readPhone()
+    if (!phoneNumber || pending) {
+      return
     }
+
+    await runRequest(async () => {
+      await sendOtp(phoneNumber, "RESET_PASSWORD")
+    })
+  }
+
+  function skipSetPassword() {
+    if (pending) {
+      return
+    }
+
+    finishLogin(pendingRedirect)
   }
 
   function editPhone() {
@@ -162,11 +213,15 @@ export function LoginForm({
     setStep("phone")
     setPhone(formatMobileInput(phone))
     setOtp("")
+    setPassword("")
     setError("")
     setResendIn(0)
+    setLockIn(0)
+    setDevCode("")
+    setOtpPurpose("LOGIN")
   }
 
-  function onPhoneChange(event: React.ChangeEvent<HTMLInputElement>) {
+  function onPhoneChange(event: ChangeEvent<HTMLInputElement>) {
     const input = event.target
     const caret = input.selectionStart ?? input.value.length
     const digitsBeforeCaret = toAsciiDigits(
@@ -183,118 +238,195 @@ export function LoginForm({
     })
   }
 
-  if (step === "otp") {
-    const otpErrorId = error ? "otp-error" : undefined
+  async function sendOtp(phoneNumber: string, purpose: OtpPurpose) {
+    const requested = await requestOtp(phoneNumber)
+    setOtpPurpose(purpose)
+    setOtp("")
+    setPassword("")
+    setDevCode(requested.devCode)
+    setResendIn(requested.cooldownSeconds)
+    setLockIn(0)
+    setStep("otp")
+  }
 
+  async function runRequest(action: () => Promise<void>) {
+    if (pending) {
+      return
+    }
+
+    setPending(true)
+    setError("")
+
+    try {
+      await action()
+    } catch (reason) {
+      applyError(reason)
+    } finally {
+      setPending(false)
+    }
+  }
+
+  function applyError(reason: unknown) {
+    if (!isLoginApiError(reason)) {
+      setError("درخواست انجام نشد. دوباره تلاش کنید.")
+      return
+    }
+
+    setError(formatLoginError(reason))
+
+    if (typeof reason.retryAfter === "number" && reason.retryAfter > 0) {
+      setLockIn(reason.retryAfter)
+      if (reason.code !== "LOCKED") {
+        setResendIn(reason.retryAfter)
+      }
+    }
+
+    if (reason.code === "OTP_EXHAUSTED" || reason.code === "OTP_EXPIRED") {
+      setOtp("")
+      setResendIn(0)
+    }
+
+    if (reason.code === "INVALID_PHONE") {
+      setStep("phone")
+    }
+
+    if (reason.code === "UNAUTHORIZED") {
+      setStep("phone")
+      setOtp("")
+      setPassword("")
+    }
+
+    if (reason.code === "RESET_NOT_ALLOWED") {
+      setOtpPurpose("RESET_PASSWORD")
+      setOtp("")
+      setResendIn(0)
+      setStep("otp")
+    }
+
+    if (reason.code === "PASSWORD_EXISTS") {
+      finishLogin(pendingRedirect)
+    }
+  }
+
+  function readPhone() {
+    const phoneNumber = normalizeIranMobile(phone)
+    if (!phoneNumber) {
+      setError("شماره موبایل را با ۰۹ و ۱۱ رقم وارد کنید.")
+      setStep("phone")
+      return ""
+    }
+
+    return phoneNumber
+  }
+
+  function finishLogin(path: string) {
+    const phoneNumber = normalizeIranMobile(phone)
+    if (phoneNumber) {
+      signInAccount(phoneNumber)
+    }
+    router.push(safeRedirectPath(path))
+  }
+
+  if (step === "password") {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>کد یک‌بارمصرف</CardTitle>
-          <CardDescription>
-            کد {OTP_LENGTH} رقمی ارسال‌شده به {formatIranMobile(phone)} را وارد
-            کنید.
-          </CardDescription>
-        </CardHeader>
-        <form onSubmit={submitOtp}>
-          <CardContent>
-            <FormField id="otp" label="کد تأیید" error={error}>
-              <Input
-                id="otp"
-                name="otp"
-                className={fieldClassName}
-                dir="ltr"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                enterKeyHint="done"
-                maxLength={OTP_LENGTH}
-                value={otp}
-                aria-invalid={Boolean(error) || undefined}
-                aria-describedby={otpErrorId}
-                placeholder="۱۲۳۴۵"
-                onChange={(event) => {
-                  setOtp(normalizeOtp(event.target.value))
-                  setError("")
-                }}
-              />
-            </FormField>
-          </CardContent>
-          <CardFooter className="flex-col items-stretch gap-2">
-            <Button type="submit" className="h-11 w-full" disabled={pending}>
-              {pending ? <LoaderCircleIcon className="animate-spin" /> : null}
-              {pending ? "در حال بررسی" : "تأیید کد"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 w-full"
-              disabled={pending || resendIn > 0}
-              onClick={resendCode}
-            >
-              {resendIn > 0
-                ? `ارسال دوباره تا ${resendIn} ثانیه`
-                : "ارسال دوباره"}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-11 w-full"
-              disabled={pending}
-              onClick={editPhone}
-            >
-              ویرایش شماره
-            </Button>
-          </CardFooter>
-        </form>
-      </Card>
+      <PasswordStep
+        phone={phone}
+        password={password}
+        error={error}
+        pending={pending}
+        lockIn={lockIn}
+        onPasswordChange={(value) => {
+          setPassword(value)
+          setError("")
+        }}
+        onSubmit={submitPassword}
+        onForgotPassword={forgotPassword}
+        onEditPhone={editPhone}
+      />
     )
   }
 
-  const phoneDescribedBy = [error ? "phone-error" : "", "phone-hint"]
-    .filter(Boolean)
-    .join(" ")
+  if (step === "otp") {
+    return (
+      <OtpStep
+        phone={phone}
+        otp={otp}
+        error={error}
+        pending={pending}
+        lockIn={lockIn}
+        resendIn={resendIn}
+        devCode={devCode}
+        onOtpChange={(value) => {
+          setOtp(normalizeOtp(value))
+          setError("")
+        }}
+        onSubmit={submitOtp}
+        onResend={resendCode}
+        onEditPhone={editPhone}
+      />
+    )
+  }
+
+  if (step === "set-password" || step === "reset-password") {
+    return (
+      <PasswordCreateStep
+        mode={step === "reset-password" ? "reset" : "set"}
+        password={password}
+        error={error}
+        pending={pending}
+        lockIn={lockIn}
+        onPasswordChange={(value) => {
+          setPassword(value)
+          setError("")
+        }}
+        onSubmit={submitNewPassword}
+        onSkip={step === "set-password" ? skipSetPassword : undefined}
+      />
+    )
+  }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>شماره موبایل</CardTitle>
-        <CardDescription>
-          پس از ثبت شماره، کد یک‌بارمصرف از شما خواسته می‌شود.
-        </CardDescription>
-      </CardHeader>
-      <form onSubmit={submitPhone}>
-        <CardContent>
-          <FormField
-            id="phone"
-            label="شماره موبایل"
-            error={error}
-            hint="مثال: ۰۹۱۲ ۳۴۵ ۶۷۸۹"
-          >
-            <Input
-              id="phone"
-              name="tel"
-              className={fieldClassName}
-              dir="ltr"
-              type="tel"
-              inputMode="numeric"
-              autoComplete="tel"
-              autoFocus
-              enterKeyHint="next"
-              maxLength={MOBILE_INPUT_MAX}
-              value={phone}
-              aria-invalid={Boolean(error) || undefined}
-              aria-describedby={phoneDescribedBy}
-              placeholder="۰۹۱۲ ۳۴۵ ۶۷۸۹"
-              onChange={onPhoneChange}
-            />
-          </FormField>
-        </CardContent>
-        <CardFooter>
-          <Button type="submit" className="h-11 w-full" disabled={pending}>
-            {pending ? <LoaderCircleIcon className="animate-spin" /> : null}
-            {pending ? "در حال ارسال" : "دریافت کد"}
-          </Button>
-        </CardFooter>
-      </form>
-    </Card>
+    <PhoneStep
+      phone={phone}
+      error={error}
+      pending={pending}
+      lockIn={lockIn}
+      onPhoneChange={onPhoneChange}
+      onSubmit={submitPhone}
+    />
   )
+}
+
+/** Warns before refresh or close while a login request is in flight. */
+function useBlockUnload(active: boolean) {
+  useEffect(() => {
+    if (!active) {
+      return
+    }
+
+    function blockUnload(event: BeforeUnloadEvent) {
+      event.preventDefault()
+    }
+
+    window.addEventListener("beforeunload", blockUnload)
+    return () => window.removeEventListener("beforeunload", blockUnload)
+  }, [active])
+}
+
+/** Counts a remaining-seconds value down to zero. */
+function useCountdown(
+  remaining: number,
+  setRemaining: Dispatch<SetStateAction<number>>
+) {
+  useEffect(() => {
+    if (remaining <= 0) {
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      setRemaining((current) => (current > 0 ? current - 1 : 0))
+    }, 1000)
+
+    return () => window.clearTimeout(timer)
+  }, [remaining, setRemaining])
 }
