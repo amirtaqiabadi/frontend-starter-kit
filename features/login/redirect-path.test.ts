@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest"
 
-import { safeRedirectPath } from "@/features/login/redirect-path"
+import { loginPath, safeRedirectPath } from "@/features/login/redirect-path"
+
+describe("loginPath", () => {
+  it("encodes a safe next path", () => {
+    expect(loginPath("/wallet/payment/failure")).toBe(
+      "/login?next=%2Fwallet%2Fpayment%2Ffailure"
+    )
+  })
+
+  it("falls back when next is unsafe", () => {
+    expect(loginPath("https://evil.example")).toBe("/login?next=%2Faccount")
+  })
+})
 
 describe("safeRedirectPath", () => {
   it("keeps a single-slash relative path", () => {

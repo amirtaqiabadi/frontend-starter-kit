@@ -1,19 +1,14 @@
 import { cn } from "cn"
 
 import { formatToman } from "@/lib/money"
-import type { TransactionKind } from "@/features/account/account-store"
 
 type TransactionAmountProps = {
   amountRial: number
-  kind: TransactionKind
 }
 
-/** Shows a Toman amount in green when money comes in and red when it goes out. */
-export function TransactionAmount({
-  amountRial,
-  kind,
-}: TransactionAmountProps) {
-  const positive = kind === "deposit"
+/** Shows a signed Toman amount: green for credits, red for debits. */
+export function TransactionAmount({ amountRial }: TransactionAmountProps) {
+  const positive = amountRial >= 0
 
   return (
     <span
@@ -22,7 +17,9 @@ export function TransactionAmount({
         positive ? "text-success" : "text-destructive"
       )}
     >
-      {formatToman(amountRial)}
+      {positive
+        ? formatToman(amountRial)
+        : `−${formatToman(Math.abs(amountRial))}`}
     </span>
   )
 }

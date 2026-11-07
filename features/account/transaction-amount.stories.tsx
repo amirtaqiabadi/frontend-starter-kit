@@ -8,13 +8,6 @@ const meta = {
   tags: ["autodocs"],
   args: {
     amountRial: 100_000,
-    kind: "deposit",
-  },
-  argTypes: {
-    kind: {
-      control: "select",
-      options: ["deposit", "withdraw"],
-    },
   },
 } satisfies Meta<typeof TransactionAmount>
 
@@ -24,13 +17,13 @@ type Story = StoryObj<typeof meta>
 
 export const Positive: Story = {
   args: {
-    kind: "deposit",
+    amountRial: 100_000,
   },
 }
 
 export const Negative: Story = {
   args: {
-    kind: "withdraw",
+    amountRial: -100_000,
   },
 }
 
@@ -39,11 +32,11 @@ export const Colors: Story = {
     <div className="flex w-56 flex-col gap-3 text-sm">
       <div className="flex items-center justify-between gap-3">
         <span>افزایش موجودی</span>
-        <TransactionAmount kind="deposit" amountRial={100_000} />
+        <TransactionAmount amountRial={100_000} />
       </div>
       <div className="flex items-center justify-between gap-3">
-        <span>برداشت</span>
-        <TransactionAmount kind="withdraw" amountRial={100_000} />
+        <span>بازگشت به درگاه</span>
+        <TransactionAmount amountRial={-100_000} />
       </div>
     </div>
   ),
