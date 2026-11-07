@@ -183,7 +183,7 @@ export function LoginForm({
 
     await runRequest(async () => {
       await sendOtp(phoneNumber, otpPurpose)
-    })
+    }, "resend")
   }
 
   async function forgotPassword() {
@@ -249,7 +249,10 @@ export function LoginForm({
     setStep("otp")
   }
 
-  async function runRequest(action: () => Promise<void>) {
+  async function runRequest(
+    action: () => Promise<void>,
+    throttle: "submit" | "resend" = "submit"
+  ) {
     if (pending) {
       return
     }
@@ -260,13 +263,13 @@ export function LoginForm({
     try {
       await action()
     } catch (reason) {
-      applyError(reason)
+      applyError(reason, throttle)
     } finally {
       setPending(false)
     }
   }
 
-  function applyError(reason: unknown) {
+  function applyError(reason: unknown, throttle: "submit" | "resend") {
     if (!isLoginApiError(reason)) {
       setError("درخواست انجام نشد. دوباره تلاش کنید.")
       return
@@ -275,9 +278,13 @@ export function LoginForm({
     setError(formatLoginError(reason))
 
     if (typeof reason.retryAfter === "number" && reason.retryAfter > 0) {
-      setLockIn(reason.retryAfter)
-      if (reason.code !== "LOCKED") {
+      if (throttle === "resend") {
         setResendIn(reason.retryAfter)
+      } else {
+        setLockIn(reason.retryAfter)
+        if (reason.code !== "LOCKED") {
+          setResendIn(reason.retryAfter)
+        }
       }
     }
 
