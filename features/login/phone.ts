@@ -3,7 +3,6 @@ import { toAsciiDigits, toPersianDigits } from "@/lib/digits"
 export { toAsciiDigits, toPersianDigits }
 
 export const OTP_LENGTH = 5
-export const RESEND_SECONDS = 60
 export const MOBILE_LENGTH = 11
 
 /** Returns 09xxxxxxxxx, or an empty string when the value is not an Iranian mobile. */
