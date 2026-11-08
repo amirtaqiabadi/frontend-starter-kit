@@ -1,3 +1,4 @@
+import { apiPath } from "@/lib/api-path"
 import { toPersianDigits } from "@/lib/digits"
 
 import { safeRedirectPath } from "@/features/login/redirect-path"
@@ -59,7 +60,7 @@ export function formatLoginError(error: LoginApiError) {
 
 /** Chooses password or OTP after the phone number is submitted. */
 export async function identifyAccount(phoneNumber: string) {
-  const data = await authPost("/api/auth/identify", { phoneNumber })
+  const data = await authPost(apiPath("/auth/identify"), { phoneNumber })
   const nextStep = readString(data, "nextStep")
   if (nextStep !== "PASSWORD" && nextStep !== "OTP") {
     throw new LoginApiError({
@@ -78,7 +79,7 @@ export async function loginWithPassword(input: {
   password: string
   next?: string
 }) {
-  const data = await authPost("/api/auth/password/login", {
+  const data = await authPost(apiPath("/auth/password/login"), {
     phoneNumber: input.phoneNumber,
     password: input.password,
     ...optionalNext(input.next),
@@ -89,7 +90,7 @@ export async function loginWithPassword(input: {
 
 /** Asks the SMS provider for a 5-digit login or reset code. */
 export async function requestOtp(phoneNumber: string) {
-  const data = await authPost("/api/auth/otp/request", { phoneNumber })
+  const data = await authPost(apiPath("/auth/otp/request"), { phoneNumber })
   const cooldown = readNumber(data, "cooldownSeconds")
   const devCode = readString(data, "devCode")
 
@@ -112,7 +113,7 @@ export async function verifyOtp(input: {
 }) {
   const purpose = input.purpose ?? "LOGIN"
   const token = purpose === "LOGIN" ? input.token?.trim() : ""
-  const data = await authPost("/api/auth/otp/verify", {
+  const data = await authPost(apiPath("/auth/otp/verify"), {
     phoneNumber: input.phoneNumber,
     code: input.code,
     purpose,
@@ -131,7 +132,7 @@ export async function fetchAuthToken() {
   let response: Response
 
   try {
-    response = await fetch("/api/auth/token", {
+    response = await fetch(apiPath("/auth/token"), {
       credentials: "include",
       cache: "no-store",
     })
@@ -158,12 +159,12 @@ export async function fetchAuthToken() {
 
 /** Sets the first password on an account that does not have one. */
 export async function setPassword(password: string) {
-  await authPost("/api/auth/password/set", { password })
+  await authPost(apiPath("/auth/password/set"), { password })
 }
 
 /** Replaces the password after a RESET_PASSWORD OTP. */
 export async function resetPassword(password: string) {
-  await authPost("/api/auth/password/reset", { password })
+  await authPost(apiPath("/auth/password/reset"), { password })
 }
 
 /** Posts one JSON object to an auth route with the session cookie. */

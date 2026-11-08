@@ -35,7 +35,7 @@ describe("identifyAccount", () => {
       nextStep: "OTP",
     })
     expect(fetch).toHaveBeenCalledWith(
-      "/api/auth/identify",
+      "/api/v1/auth/identify",
       expect.objectContaining({
         method: "POST",
         credentials: "include",
@@ -150,7 +150,7 @@ describe("fetchAuthToken", () => {
 
     await expect(fetchAuthToken()).resolves.toBe("A2C46")
     expect(fetch).toHaveBeenCalledWith(
-      "/api/auth/token",
+      "/api/v1/auth/token",
       expect.objectContaining({ credentials: "include" })
     )
   })

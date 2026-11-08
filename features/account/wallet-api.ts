@@ -1,3 +1,5 @@
+import { apiPath } from "@/lib/api-path"
+
 import {
   readRefundStatus,
   readWalletRole,
@@ -65,7 +67,7 @@ export function isUnauthorized(error: unknown) {
 
 /** Lists wallets for the signed-in user. `401` means signed out. */
 export async function listWallets() {
-  const data = await walletGet("/api/wallets")
+  const data = await walletGet(apiPath("/wallets"))
   const wallets = asRecord(data)?.wallets
   if (!Array.isArray(wallets)) {
     return []
@@ -81,7 +83,7 @@ export async function listWallets() {
 export async function createWallet(displayName?: string) {
   const trimmed = displayName?.trim() ?? ""
   const data = await walletPost(
-    "/api/wallets",
+    apiPath("/wallets"),
     trimmed ? { displayName: trimmed } : {}
   )
   const wallet = parseWallet(data)
@@ -98,7 +100,7 @@ export async function initiatePayment(input: {
   description: string
   teamId?: number
 }) {
-  const data = await walletPost("/api/payment/initiate", {
+  const data = await walletPost(apiPath("/payment/initiate"), {
     amount: input.amount,
     description: input.description,
     ...(typeof input.teamId === "number" ? { teamId: input.teamId } : {}),
@@ -116,7 +118,7 @@ export async function initiatePayment(input: {
 
 /** Newest-first ledger for an owned wallet. */
 export async function listTransactions(teamId: number) {
-  const data = await walletGet(`/api/wallets/${teamId}/transactions`)
+  const data = await walletGet(apiPath(`/wallets/${teamId}/transactions`))
   const transactions = asRecord(data)?.transactions
   if (!Array.isArray(transactions)) {
     return []
@@ -130,7 +132,7 @@ export async function listTransactions(teamId: number) {
 
 /** Asks the gateway to reverse a successful top-up. */
 export async function reversePayment(attemptId: number) {
-  await walletPost("/api/payment/reverse", { attemptId })
+  await walletPost(apiPath("/payment/reverse"), { attemptId })
 }
 
 /** Stores a manual card payout request. Does not change the balance. */
@@ -138,7 +140,7 @@ export async function requestRefund(input: {
   transactionId: number
   cardNumber: string
 }) {
-  const data = await walletPost("/api/payment/refunds", {
+  const data = await walletPost(apiPath("/payment/refunds"), {
     transactionId: input.transactionId,
     cardNumber: input.cardNumber,
   })
@@ -152,7 +154,7 @@ export async function requestRefund(input: {
 
 /** Newest-first card refunds for an owned wallet. */
 export async function listRefunds(teamId: number) {
-  const data = await walletGet(`/api/payment/refunds?teamId=${teamId}`)
+  const data = await walletGet(apiPath(`/payment/refunds?teamId=${teamId}`))
   const refunds = asRecord(data)?.refunds
   if (!Array.isArray(refunds)) {
     return []
@@ -168,7 +170,7 @@ export async function listRefunds(teamId: number) {
 export async function recoverPayment(authority?: string) {
   const trimmed = authority?.trim() ?? ""
   const data = await walletPost(
-    "/api/payment/recover",
+    apiPath("/payment/recover"),
     trimmed ? { authority: trimmed } : {}
   )
   const recovered = readInt(asRecord(data)?.recovered)
