@@ -5,6 +5,7 @@ import {
   identifyAccount,
   LoginApiError,
   requestOtp,
+  fetchAuthToken,
   verifyOtp,
 } from "@/features/login/login-api"
 
@@ -108,6 +109,65 @@ describe("verifyOtp", () => {
     ).resolves.toEqual({
       hasPassword: true,
       redirectTo: "/account",
+    })
+  })
+
+  it("sends a login invite token and omits it for password reset", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () =>
+      jsonResponse(200, { hasPassword: false, redirectTo: "/account" })
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    await verifyOtp({
+      phoneNumber: "09123456789",
+      code: "12345",
+      purpose: "LOGIN",
+      token: "A2C46",
+    })
+    await verifyOtp({
+      phoneNumber: "09123456789",
+      code: "12345",
+      purpose: "RESET_PASSWORD",
+      token: "A2C46",
+    })
+
+    const bodies = fetchMock.mock.calls
+      .map((call) => JSON.parse(String(call[1]?.body)))
+      .filter((body) => body.phoneNumber)
+
+    expect(bodies[0]).toMatchObject({ purpose: "LOGIN", token: "A2C46" })
+    expect(bodies[1]).toMatchObject({ purpose: "RESET_PASSWORD" })
+    expect(bodies[1].token).toBeUndefined()
+  })
+})
+
+describe("fetchAuthToken", () => {
+  it("reads the token and ignores extra fields", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(200, { token: "A2C46", extra: 1 }))
+    )
+
+    await expect(fetchAuthToken()).resolves.toBe("A2C46")
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/auth/token",
+      expect.objectContaining({ credentials: "include" })
+    )
+  })
+
+  it("treats 401 as signed out", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse(401, {
+          error: { code: "UNAUTHORIZED", message: "وارد نشده‌اید." },
+        })
+      )
+    )
+
+    await expect(fetchAuthToken()).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+      status: 401,
     })
   })
 })

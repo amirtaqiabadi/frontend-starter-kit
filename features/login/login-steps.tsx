@@ -16,7 +16,9 @@ import { toPersianDigits } from "@/lib/digits"
 import {
   formatIranMobile,
   MOBILE_INPUT_MAX,
+  MOBILE_LENGTH,
   OTP_LENGTH,
+  toAsciiDigits,
 } from "@/features/login/phone"
 import {
   PASSWORD_MAX_LENGTH,
@@ -27,7 +29,7 @@ export const fieldClassName = "h-11 text-base"
 
 type LoginStepCardProps = {
   title: string
-  description: string
+  description?: ReactNode
   children: ReactNode
 }
 
@@ -41,7 +43,7 @@ export function LoginStepCard({
     <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+        {description ? <CardDescription>{description}</CardDescription> : null}
       </CardHeader>
       {children}
     </Card>
@@ -69,14 +71,13 @@ export function PhoneStep({
   const describedBy = [error ? "phone-error" : "", "phone-hint"]
     .filter(Boolean)
     .join(" ")
+  const phoneComplete =
+    toAsciiDigits(phone).replace(/\D/g, "").length === MOBILE_LENGTH
 
   return (
-    <LoginStepCard
-      title="شماره موبایل"
-      description="اگر برای این شماره رمز ثبت شده باشد همان را می‌پرسیم؛ وگرنه کد پیامکی می‌فرستیم."
-    >
-      <form onSubmit={onSubmit}>
-        <CardContent>
+    <LoginStepCard title="شماره موبایل">
+      <form className="flex flex-col gap-(--card-spacing)" onSubmit={onSubmit}>
+        <CardContent className="flex flex-col gap-4">
           <FormField
             id="phone"
             label="شماره موبایل"
@@ -101,9 +102,17 @@ export function PhoneStep({
               onChange={onPhoneChange}
             />
           </FormField>
+          <p className="text-sm text-muted-foreground">
+            با ثبت‌نام، قوانین و مقررات وبسایت را می‌پذیرم.
+          </p>
         </CardContent>
         <CardFooter>
-          <PendingButton pending={pending} lockIn={lockIn} idleLabel="ادامه">
+          <PendingButton
+            pending={pending}
+            lockIn={lockIn}
+            idleLabel="ادامه"
+            disabled={!phoneComplete}
+          >
             در حال بررسی
           </PendingButton>
         </CardFooter>
@@ -139,9 +148,14 @@ export function PasswordStep({
   return (
     <LoginStepCard
       title="رمز عبور"
-      description={`رمز عبور شماره ${formatIranMobile(phone)} را وارد کنید.`}
+      description={
+        <>
+          رمز عبور شماره <bdi dir="ltr">{formatIranMobile(phone)}</bdi> را وارد
+          کنید.
+        </>
+      }
     >
-      <form onSubmit={onSubmit}>
+      <form className="flex flex-col gap-(--card-spacing)" onSubmit={onSubmit}>
         <CardContent>
           <FormField id="password" label="رمز عبور" error={error}>
             <Input
@@ -220,9 +234,14 @@ export function OtpStep({
   return (
     <LoginStepCard
       title="کد یک‌بارمصرف"
-      description={`کد ${toPersianDigits(String(OTP_LENGTH))} رقمی ارسال‌شده به ${formatIranMobile(phone)} را وارد کنید.`}
+      description={
+        <>
+          کد {toPersianDigits(String(OTP_LENGTH))} رقمی ارسال‌شده به{" "}
+          <bdi dir="ltr">{formatIranMobile(phone)}</bdi> را وارد کنید.
+        </>
+      }
     >
-      <form onSubmit={onSubmit}>
+      <form className="flex flex-col gap-(--card-spacing)" onSubmit={onSubmit}>
         <CardContent className="flex flex-col gap-3">
           {devCode ? (
             <p className="rounded-lg bg-muted px-3 py-2 text-sm" dir="ltr">
@@ -311,7 +330,7 @@ export function PasswordCreateStep({
           : "می‌توانید برای ورودهای بعد یک رمز بگذارید، یا این مرحله را رد کنید."
       }
     >
-      <form onSubmit={onSubmit}>
+      <form className="flex flex-col gap-(--card-spacing)" onSubmit={onSubmit}>
         <CardContent>
           <FormField id="new-password" label="رمز عبور" error={error}>
             <Input
@@ -360,6 +379,7 @@ type PendingButtonProps = {
   pending: boolean
   lockIn: number
   idleLabel: string
+  disabled?: boolean
   children: ReactNode
 }
 
@@ -368,12 +388,17 @@ function PendingButton({
   pending,
   lockIn,
   idleLabel,
+  disabled = false,
   children,
 }: PendingButtonProps) {
   const locked = lockIn > 0
 
   return (
-    <Button type="submit" className="h-11 w-full" disabled={pending || locked}>
+    <Button
+      type="submit"
+      className="h-11 w-full"
+      disabled={disabled || pending || locked}
+    >
       {pending ? <LoaderCircleIcon className="animate-spin" /> : null}
       {pending
         ? children

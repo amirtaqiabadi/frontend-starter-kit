@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { LoaderCircleIcon } from "lucide-react"
 
 import { AvatarUploader } from "@/components/organisms/avatar-uploader/avatar-uploader"
@@ -17,28 +18,133 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
-import { formatIranMobile } from "@/features/login/phone"
-import { loginPath } from "@/features/login/redirect-path"
 import {
   readAccount,
   saveAccount,
+  signOutAccount,
   subscribeAccount,
   type AccountProfile,
 } from "@/features/account/account-store"
-import {
-  isUnauthorized,
-  isWalletApiError,
-  listWallets,
-} from "@/features/account/wallet-api"
-import { WalletPanel } from "@/features/account/wallet-panel"
-import type {
-  CardRefund,
-  LedgerTransaction,
-  Wallet,
-} from "@/features/account/wallet-model"
+import { InviteFriends } from "@/features/account/invite-friends"
+import { requestSignOut } from "@/features/account/sign-out"
+import { WalletBalanceList } from "@/features/account/wallet-balance-list"
+import { useWalletSession } from "@/features/account/wallet-session"
+import type { Wallet } from "@/features/account/wallet-model"
+import { formatIranMobile } from "@/features/login/phone"
+import { loginPath } from "@/features/login/redirect-path"
 
-const fieldClassName = "h-11 text-base"
+const fieldClassName = "h-11 text-base md:text-base"
 const MAX_NAME_LENGTH = 60
+
+type AccountPreview = {
+  wallets: Wallet[]
+  account?: AccountProfile
+}
+
+type AccountPanelProps = {
+  preview?: "guest" | "error" | AccountPreview
+}
+
+/** Profile, wallet entry, invites, and sign-out for the signed-in account. */
+export function AccountPanel({ preview }: AccountPanelProps) {
+  if (preview === "guest") {
+    return <AccountGuest />
+  }
+
+  if (preview === "error") {
+    return (
+      <AccountError message="ارتباط با سرور برقرار نشد. دوباره تلاش کنید." />
+    )
+  }
+
+  if (preview) {
+    return (
+      <PreviewAccount
+        initialAccount={preview.account ?? emptyPreviewAccount}
+        wallets={preview.wallets}
+      />
+    )
+  }
+
+  return <LiveAccount />
+}
+
+const emptyPreviewAccount: AccountProfile = {
+  phone: "09123456789",
+  name: "",
+  avatarDataUrl: "",
+}
+
+function PreviewAccount({
+  initialAccount,
+  wallets,
+}: {
+  initialAccount: AccountProfile
+  wallets: Wallet[]
+}) {
+  const [account, setAccount] = useState(initialAccount)
+
+  return (
+    <AccountHome
+      account={account}
+      wallets={wallets}
+      onAccountChange={setAccount}
+      preview
+    />
+  )
+}
+
+function LiveAccount() {
+  const session = useWalletSession()
+  const account = useSyncExternalStore(
+    subscribeAccount,
+    readAccount,
+    emptyAccount
+  )
+
+  if (session.status === "loading") {
+    return <Skeleton className="h-48" />
+  }
+
+  if (session.status === "signed-out") {
+    return <AccountGuest />
+  }
+
+  if (session.status === "error") {
+    return <AccountError message={session.message} onRetry={session.retry} />
+  }
+
+  return (
+    <AccountHome
+      account={account}
+      wallets={session.wallets}
+      onAccountChange={saveAccount}
+    />
+  )
+}
+
+function AccountHome({
+  account,
+  wallets,
+  onAccountChange,
+  preview = false,
+}: {
+  account: AccountProfile | null
+  wallets: Wallet[]
+  onAccountChange: (next: AccountProfile) => void
+  preview?: boolean
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      {account ? (
+        <ProfileForm account={account} onAccountChange={onAccountChange} />
+      ) : null}
+      <WalletEntry wallets={wallets} />
+      <InviteFriends code={preview ? "A2C46" : undefined} />
+      <SignOutButton preview={preview} />
+    </div>
+  )
+}
 
 /** Reads the optimized WebP into the data URL stored on the account. */
 function readOptimizedAvatar(file: File) {
@@ -57,165 +163,6 @@ function readOptimizedAvatar(file: File) {
     }
     reader.readAsDataURL(file)
   })
-}
-
-export type WalletPreview = {
-  wallets: Wallet[]
-  transactions?: LedgerTransaction[]
-  refunds?: CardRefund[]
-}
-
-type AccountPanelProps = {
-  initialAccount?: AccountProfile | null
-  walletPreview?: WalletPreview
-}
-
-/** Account profile editor and live wallet, or a prompt when nobody is signed in. */
-export function AccountPanel({
-  initialAccount,
-  walletPreview,
-}: AccountPanelProps) {
-  if (initialAccount !== undefined) {
-    return (
-      <PreviewAccount
-        initialAccount={initialAccount}
-        walletPreview={walletPreview}
-      />
-    )
-  }
-
-  return <StoredAccount />
-}
-
-function PreviewAccount({
-  initialAccount,
-  walletPreview,
-}: {
-  initialAccount: AccountProfile | null
-  walletPreview?: WalletPreview
-}) {
-  const [account, setAccount] = useState(initialAccount)
-  if (!account) {
-    return <AccountGuest />
-  }
-
-  return (
-    <AccountBody
-      account={account}
-      onAccountChange={setAccount}
-      wallets={walletPreview?.wallets ?? []}
-      transactions={walletPreview?.transactions}
-      refunds={walletPreview?.refunds}
-      preview
-    />
-  )
-}
-
-function StoredAccount() {
-  const hydrated = useSyncExternalStore(
-    subscribeHydration,
-    isHydrated,
-    isServer
-  )
-  const account = useSyncExternalStore(
-    subscribeAccount,
-    readAccount,
-    emptyAccount
-  )
-  const session = useWalletSession()
-
-  if (!hydrated || session.status === "loading") {
-    return <AccountSkeleton />
-  }
-
-  if (session.status === "signed-out") {
-    return <AccountGuest />
-  }
-
-  if (session.status === "error") {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>کیف پول بارگذاری نشد</CardTitle>
-          <CardDescription>{session.message}</CardDescription>
-        </CardHeader>
-        <CardFooter>
-          <Button className="h-11" onClick={session.retry}>
-            تلاش دوباره
-          </Button>
-        </CardFooter>
-      </Card>
-    )
-  }
-
-  return (
-    <AccountBody
-      account={account}
-      onAccountChange={saveAccount}
-      wallets={session.wallets}
-    />
-  )
-}
-
-function AccountSkeleton() {
-  return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <Skeleton className="h-64" />
-      <Skeleton className="h-80" />
-    </div>
-  )
-}
-
-function AccountGuest() {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>وارد نشده‌اید</CardTitle>
-        <CardDescription>
-          برای دیدن حساب کاربری و کیف پول با شماره موبایل وارد شوید.
-        </CardDescription>
-      </CardHeader>
-      <CardFooter>
-        <Button
-          nativeButton={false}
-          render={<Link href={loginPath("/account")} />}
-          className="h-11"
-        >
-          ورود
-        </Button>
-      </CardFooter>
-    </Card>
-  )
-}
-
-function AccountBody({
-  account,
-  onAccountChange,
-  wallets,
-  transactions,
-  refunds,
-  preview = false,
-}: {
-  account: AccountProfile | null
-  onAccountChange: (next: AccountProfile) => void
-  wallets: Wallet[]
-  transactions?: LedgerTransaction[]
-  refunds?: CardRefund[]
-  preview?: boolean
-}) {
-  return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      {account ? (
-        <ProfileForm account={account} onAccountChange={onAccountChange} />
-      ) : null}
-      <WalletPanel
-        initialWallets={wallets}
-        initialTransactions={transactions}
-        initialRefunds={refunds}
-        preview={preview}
-      />
-    </div>
-  )
 }
 
 function ProfileForm({
@@ -269,17 +216,22 @@ function ProfileForm({
   }
 
   const avatarLabel = name.trim() ? `تصویر ${name.trim()}` : "آواتار"
+  const phone = formatIranMobile(account.phone)
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>مشخصات</CardTitle>
-        <CardDescription>
-          شماره {formatIranMobile(account.phone)}. نام و تصویر را اضافه یا
-          ویرایش کنید.
-        </CardDescription>
+        {phone ? (
+          <CardDescription>
+            شماره <bdi dir="ltr">{phone}</bdi>
+          </CardDescription>
+        ) : null}
       </CardHeader>
-      <form onSubmit={saveProfile}>
+      <form
+        className="flex flex-col gap-(--card-spacing)"
+        onSubmit={saveProfile}
+      >
         <CardContent className="flex flex-col gap-4">
           <AvatarUploader
             value={avatarDataUrl}
@@ -329,66 +281,134 @@ function ProfileForm({
   )
 }
 
-type WalletSession =
-  | { status: "loading" }
-  | { status: "signed-out" }
-  | { status: "error"; message: string; retry: () => void }
-  | { status: "ready"; wallets: Wallet[] }
+function emptyAccount() {
+  return null
+}
 
-/** Loads wallets once; `401` is signed out. */
-function useWalletSession(): WalletSession {
-  const [state, setState] = useState<
-    | { status: "loading" }
-    | { status: "signed-out" }
-    | { status: "error"; message: string }
-    | { status: "ready"; wallets: Wallet[] }
-  >({ status: "loading" })
-  const [nonce, setNonce] = useState(0)
+function WalletEntry({ wallets }: { wallets: Wallet[] }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>کیف پول</CardTitle>
+        <CardDescription>
+          شارژ، تاریخچه، بازگشت و استرداد در صفحه کیف پول است.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {wallets.length === 0 ? (
+          <p className="text-sm text-muted-foreground">هنوز کیف پولی ندارید.</p>
+        ) : (
+          <WalletBalanceList wallets={wallets} />
+        )}
+      </CardContent>
+      <CardFooter>
+        <Button
+          nativeButton={false}
+          render={<Link href="/wallet" />}
+          className="h-11 w-full sm:w-auto"
+        >
+          مشاهده کیف پول
+        </Button>
+      </CardFooter>
+    </Card>
+  )
+}
 
-  useEffect(() => {
-    let cancelled = false
+function AccountGuest() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>وارد نشده‌اید</CardTitle>
+        <CardDescription>
+          برای دیدن حساب کاربری و کیف پول با شماره موبایل وارد شوید.
+        </CardDescription>
+      </CardHeader>
+      <CardFooter>
+        <Button
+          nativeButton={false}
+          render={<Link href={loginPath("/account")} />}
+          className="h-11"
+        >
+          ورود
+        </Button>
+      </CardFooter>
+    </Card>
+  )
+}
 
-    listWallets()
-      .then((wallets) => {
-        if (!cancelled) {
-          setState({ status: "ready", wallets })
-        }
-      })
-      .catch((reason) => {
-        if (cancelled) {
-          return
-        }
-        if (isUnauthorized(reason)) {
-          setState({ status: "signed-out" })
-          return
-        }
-        setState({
-          status: "error",
-          message: isWalletApiError(reason)
-            ? reason.message
-            : "ارتباط با سرور برقرار نشد. دوباره تلاش کنید.",
-        })
-      })
+function AccountError({
+  message,
+  onRetry,
+}: {
+  message: string
+  onRetry?: () => void
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>حساب بارگذاری نشد</CardTitle>
+        <CardDescription>{message}</CardDescription>
+      </CardHeader>
+      {onRetry ? (
+        <CardFooter>
+          <Button className="h-11" onClick={onRetry}>
+            تلاش دوباره
+          </Button>
+        </CardFooter>
+      ) : null}
+    </Card>
+  )
+}
 
-    return () => {
-      cancelled = true
+/** Clears the browser session and returns to the login screen. */
+function SignOutButton({ preview = false }: { preview?: boolean }) {
+  const router = useRouter()
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState("")
+  useBlockUnload(pending)
+
+  async function signOut() {
+    if (preview || pending) {
+      return
     }
-  }, [nonce])
 
-  if (state.status === "error") {
-    return {
-      ...state,
-      retry: () => {
-        setState({ status: "loading" })
-        setNonce((value) => value + 1)
-      },
+    setPending(true)
+    setError("")
+
+    try {
+      await requestSignOut()
+      signOutAccount()
+      router.replace("/login")
+    } catch {
+      setError("خروج انجام نشد. دوباره تلاش کنید.")
+      setPending(false)
     }
   }
 
-  return state
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <Button
+        type="button"
+        variant="outline"
+        className="h-11 w-full sm:w-auto"
+        disabled={pending}
+        onClick={() => {
+          void signOut()
+        }}
+      >
+        {pending ? <LoaderCircleIcon className="animate-spin" /> : null}
+        {pending ? "در حال خروج" : "خروج از حساب کاربری"}
+      </Button>
+      {error ? (
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  )
 }
 
-/** Warns before refresh or close while a save is in progress. */
+/** Warns before refresh or close while sign-out is in progress. */
 function useBlockUnload(active: boolean) {
   useEffect(() => {
     if (!active) {
@@ -402,20 +422,4 @@ function useBlockUnload(active: boolean) {
     window.addEventListener("beforeunload", blockUnload)
     return () => window.removeEventListener("beforeunload", blockUnload)
   }, [active])
-}
-
-function subscribeHydration() {
-  return () => {}
-}
-
-function isHydrated() {
-  return true
-}
-
-function isServer() {
-  return false
-}
-
-function emptyAccount() {
-  return null
 }

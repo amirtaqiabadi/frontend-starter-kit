@@ -108,18 +108,52 @@ export async function verifyOtp(input: {
   code: string
   purpose?: OtpPurpose
   next?: string
+  token?: string
 }) {
+  const purpose = input.purpose ?? "LOGIN"
+  const token = purpose === "LOGIN" ? input.token?.trim() : ""
   const data = await authPost("/api/auth/otp/verify", {
     phoneNumber: input.phoneNumber,
     code: input.code,
-    purpose: input.purpose ?? "LOGIN",
+    purpose,
     ...optionalNext(input.next),
+    ...(token ? { token } : {}),
   })
 
   return {
     hasPassword: readValue(data, "hasPassword") === true,
     redirectTo: readRedirectTo(data),
   }
+}
+
+/** Reads the signed-in user's invite token. `401` is signed out. */
+export async function fetchAuthToken() {
+  let response: Response
+
+  try {
+    response = await fetch("/api/auth/token", {
+      credentials: "include",
+      cache: "no-store",
+    })
+  } catch {
+    throw new LoginApiError({ code: "NETWORK", message: NETWORK_MESSAGE })
+  }
+
+  const data = await readJson(response)
+  if (!response.ok) {
+    throw readError(data, response)
+  }
+
+  const token = readString(data, "token")
+  if (!token) {
+    throw new LoginApiError({
+      code: "UNKNOWN",
+      message: FALLBACK_MESSAGE,
+      status: response.status,
+    })
+  }
+
+  return token
 }
 
 /** Sets the first password on an account that does not have one. */

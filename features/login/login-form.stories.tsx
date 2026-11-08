@@ -17,6 +17,13 @@ type Story = StoryObj<typeof meta>
 
 export const Phone: Story = {}
 
+export const WithInviteToken: Story = {
+  args: {
+    initialPhone: "09123456789",
+    inviteToken: "a2c4-6",
+  },
+}
+
 export const LeadingZero: Story = {
   args: {
     initialPhone: "912",

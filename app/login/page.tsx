@@ -1,6 +1,9 @@
 import type { Metadata } from "next"
 import Link from "next/link"
+import { ArrowLeftIcon } from "lucide-react"
 
+import { DirectionalIcon } from "@/components/atoms/directional-icon"
+import { buttonVariants } from "@/components/ui/button"
 import { LoginForm } from "@/features/login/login-form"
 
 export const metadata: Metadata = {
@@ -18,23 +21,37 @@ export const metadata: Metadata = {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string | string[] }>
+  searchParams: Promise<{
+    next?: string | string[]
+    token?: string | string[]
+  }>
 }) {
-  const { next } = await searchParams
+  const { next, token } = await searchParams
 
   return (
     <main className="mx-auto flex min-h-svh w-full max-w-md flex-col justify-center gap-6 px-4 py-8">
       <div className="flex flex-col gap-2">
-        <Link href="/" className="text-sm text-muted-foreground">
-          خانه
+        <Link
+          href="/"
+          className={buttonVariants({
+            variant: "ghost",
+            className: "h-11 w-fit",
+          })}
+        >
+          <DirectionalIcon icon={ArrowLeftIcon} />
+          برگشت
         </Link>
         <h1 className="text-2xl font-medium">ورود</h1>
-        <p className="text-sm text-muted-foreground">
-          شماره موبایل خود را وارد کنید. اگر رمز داشته باشید همان را می‌پرسیم؛
-          وگرنه کد پیامکی می‌فرستیم.
-        </p>
       </div>
-      <LoginForm next={typeof next === "string" ? next : undefined} />
+      <LoginForm next={firstQuery(next)} inviteToken={firstQuery(token)} />
     </main>
   )
+}
+
+function firstQuery(value?: string | string[]) {
+  if (typeof value === "string") {
+    return value
+  }
+
+  return Array.isArray(value) ? value[0] : undefined
 }
