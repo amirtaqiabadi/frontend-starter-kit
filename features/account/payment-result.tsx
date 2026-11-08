@@ -14,7 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { toPersianDigits } from "@/lib/digits"
-import { formatToman } from "@/lib/money"
+import { WalletBalanceList } from "@/features/account/wallet-balance-list"
 import {
   isUnauthorized,
   isWalletApiError,
@@ -24,7 +24,6 @@ import {
 } from "@/features/account/wallet-api"
 import {
   paymentFailureMessage,
-  walletDisplayName,
   type Wallet,
 } from "@/features/account/wallet-model"
 import { loginPath } from "@/features/login/redirect-path"
@@ -109,7 +108,7 @@ export function PaymentSuccessPanel({
       <CardFooter>
         <Button
           nativeButton={false}
-          render={<Link href="/account" />}
+          render={<Link href="/wallet" />}
           className="h-11"
         >
           مشاهده کیف پول
@@ -205,7 +204,7 @@ export function PaymentFailurePanel({
         <Button
           nativeButton={false}
           variant={canRecover ? "outline" : "default"}
-          render={<Link href="/account" />}
+          render={<Link href="/wallet" />}
           className="h-11 w-full sm:w-auto"
         >
           مشاهده کیف پول
@@ -220,23 +219,7 @@ function WalletBalances({ wallets }: { wallets: Wallet[] }) {
     return <p className="text-sm text-muted-foreground">کیف پولی پیدا نشد.</p>
   }
 
-  return (
-    <ul className="flex flex-col gap-2">
-      {wallets.map((wallet) => (
-        <li
-          key={wallet.teamId}
-          className="flex items-center justify-between gap-3"
-        >
-          <span className="text-sm">
-            {walletDisplayName(wallet.displayName)}
-          </span>
-          <span className="text-sm font-medium">
-            {formatToman(wallet.availableBalance)}
-          </span>
-        </li>
-      ))}
-    </ul>
-  )
+  return <WalletBalanceList wallets={wallets} />
 }
 
 function successPath(attemptId: string, traceId: string) {

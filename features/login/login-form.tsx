@@ -12,6 +12,11 @@ import { useRouter } from "next/navigation"
 
 import { signInAccount } from "@/features/account/account-store"
 import {
+  clearInviteToken,
+  readInviteToken,
+  rememberInviteToken,
+} from "@/features/login/invite-token"
+import {
   formatLoginError,
   identifyAccount,
   isLoginApiError,
@@ -46,6 +51,7 @@ type LoginFormProps = {
   initialStep?: LoginStep
   initialPhone?: string
   next?: string
+  inviteToken?: string
 }
 
 /** Phone login against the auth API: identify, password or OTP, then optional set/reset. */
@@ -53,6 +59,7 @@ export function LoginForm({
   initialStep = "phone",
   initialPhone = "",
   next,
+  inviteToken,
 }: LoginFormProps) {
   const router = useRouter()
   const redirectTo = safeRedirectPath(next)
@@ -73,6 +80,9 @@ export function LoginForm({
   useBlockUnload(pending)
   useCountdown(resendIn, setResendIn)
   useCountdown(lockIn, setLockIn)
+  useEffect(() => {
+    rememberInviteToken(inviteToken)
+  }, [inviteToken])
 
   async function submitPhone(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -130,12 +140,15 @@ export function LoginForm({
     }
 
     await runRequest(async () => {
+      const storedToken = otpPurpose === "LOGIN" ? readInviteToken() : ""
       const result = await verifyOtp({
         phoneNumber,
         code,
         purpose: otpPurpose,
         next: redirectTo,
+        token: storedToken || undefined,
       })
+      clearInviteToken()
       setPendingRedirect(result.redirectTo)
       setPassword("")
 

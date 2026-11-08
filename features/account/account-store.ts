@@ -85,6 +85,19 @@ export function saveAccount(account: AccountProfile) {
   listeners.forEach((listener) => listener())
 }
 
+/** Drops the saved profile in this browser and notifies subscribers. */
+export function signOutAccount() {
+  try {
+    window.localStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // Cookie expiry still ends the server session in this browser.
+  }
+
+  cachedRaw = null
+  cachedAccount = null
+  listeners.forEach((listener) => listener())
+}
+
 /** Opens an account for a phone, keeping the previous profile for that same phone. */
 export function signInAccount(phone: string) {
   const current = readAccount()

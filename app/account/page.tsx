@@ -5,12 +5,11 @@ import { AccountPanel } from "@/features/account/account-panel"
 
 export const metadata: Metadata = {
   title: "حساب کاربری",
-  description:
-    "نام و تصویر حساب را ویرایش کنید. موجودی کیف پول، شارژ درگاه، تاریخچه، بازگشت و استرداد به کارت اینجاست.",
+  description: "نام و تصویر حساب، کیف پول، دعوت دوستان و خروج از حساب کاربری.",
   openGraph: {
     title: "حساب کاربری",
     description:
-      "نام و تصویر حساب را ویرایش کنید. موجودی کیف پول، شارژ درگاه، تاریخچه، بازگشت و استرداد به کارت اینجاست.",
+      "نام و تصویر حساب، کیف پول، دعوت دوستان و خروج از حساب کاربری.",
     locale: "fa_IR",
   },
 }
@@ -18,12 +17,7 @@ export const metadata: Metadata = {
 export default function AccountPage() {
   return (
     <AppShell>
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-medium">حساب کاربری</h1>
-        <p className="text-sm text-muted-foreground">
-          نام و تصویر را اضافه یا ویرایش کنید و کیف پول را از درگاه شارژ کنید.
-        </p>
-      </div>
+      <h1 className="text-2xl font-medium">حساب کاربری</h1>
       <AccountPanel />
     </AppShell>
   )

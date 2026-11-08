@@ -2,13 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite"
 
 import type { AccountProfile } from "./account-store"
 import { AccountPanel } from "./account-panel"
-import type { LedgerTransaction, Wallet } from "./wallet-model"
-
-const emptyAccount: AccountProfile = {
-  phone: "09123456789",
-  name: "",
-  avatarDataUrl: "",
-}
+import type { Wallet } from "./wallet-model"
 
 const namedAccount: AccountProfile = {
   phone: "09123456789",
@@ -32,36 +26,6 @@ const memberWallet: Wallet = {
   restrictedBalance: 0,
 }
 
-const recentCredit: LedgerTransaction = {
-  id: 91,
-  type: "GatewayCredit",
-  amount: 500_000,
-  availableBalanceAfter: 3_000_000,
-  restrictedBalanceAfter: 0,
-  gatewayAttemptId: 18,
-  createdAt: new Date().toISOString(),
-}
-
-const olderCredit: LedgerTransaction = {
-  id: 80,
-  type: "GatewayCredit",
-  amount: 800_000,
-  availableBalanceAfter: 2_500_000,
-  restrictedBalanceAfter: 0,
-  gatewayAttemptId: 12,
-  createdAt: "2026-10-01T12:00:00.000Z",
-}
-
-const reverseRow: LedgerTransaction = {
-  id: 81,
-  type: "Reverse",
-  amount: -150_000,
-  availableBalanceAfter: 2_350_000,
-  restrictedBalanceAfter: 0,
-  gatewayAttemptId: 9,
-  createdAt: "2026-10-02T09:00:00.000Z",
-}
-
 const meta = {
   title: "Features/Account",
   component: AccountPanel,
@@ -77,14 +41,19 @@ type Story = StoryObj<typeof meta>
 
 export const Guest: Story = {
   args: {
-    initialAccount: null,
+    preview: "guest",
+  },
+}
+
+export const Error: Story = {
+  args: {
+    preview: "error",
   },
 }
 
 export const Empty: Story = {
   args: {
-    initialAccount: emptyAccount,
-    walletPreview: {
+    preview: {
       wallets: [],
     },
   },
@@ -92,19 +61,17 @@ export const Empty: Story = {
 
 export const WithWallet: Story = {
   args: {
-    initialAccount: namedAccount,
-    walletPreview: {
+    preview: {
+      account: namedAccount,
       wallets: [ownedWallet],
-      transactions: [recentCredit, reverseRow, olderCredit],
-      refunds: [],
     },
   },
 }
 
 export const Member: Story = {
   args: {
-    initialAccount: namedAccount,
-    walletPreview: {
+    preview: {
+      account: namedAccount,
       wallets: [memberWallet],
     },
   },

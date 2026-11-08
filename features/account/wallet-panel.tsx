@@ -165,7 +165,7 @@ export function WalletPanel({
           return
         }
         if (isUnauthorized(reason)) {
-          router.replace(loginPath("/account"))
+          router.replace(loginPath("/wallet"))
           return
         }
         setFetchedTeamId(teamId)
@@ -191,7 +191,7 @@ export function WalletPanel({
       await work()
     } catch (reason) {
       if (isUnauthorized(reason)) {
-        router.replace(loginPath("/account"))
+        router.replace(loginPath("/wallet"))
         return
       }
       const error = toWalletError(reason)
@@ -945,10 +945,7 @@ function toWalletError(reason: unknown) {
 }
 
 /** Warns before refresh or close while a wallet request is in flight. Set allowRef to skip the intended gateway redirect. */
-function useBlockUnload(
-  active: boolean,
-  allowRef: { current: boolean }
-) {
+function useBlockUnload(active: boolean, allowRef: { current: boolean }) {
   useEffect(() => {
     if (!active) {
       return

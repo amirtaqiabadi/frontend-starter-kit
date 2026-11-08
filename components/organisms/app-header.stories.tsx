@@ -15,4 +15,14 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
-export const Default: Story = {}
+export const SignedOut: Story = {
+  args: {
+    signedIn: false,
+  },
+}
+
+export const SignedIn: Story = {
+  args: {
+    signedIn: true,
+  },
+}

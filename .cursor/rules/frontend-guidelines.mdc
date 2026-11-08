@@ -18,6 +18,12 @@ alwaysApply: true
 - Any component change → update the colocated Storybook story
 - See `docs/rtl-shadcn.md` for RTL conventions and manual exceptions
 
+## Spacing
+
+- Stacked parts keep a design-system gap. `Card` already separates its slots with `gap-(--card-spacing)`.
+- A `<form>` that wraps `CardContent` and `CardFooter` pulls those slots out of the card flex, so the fields sit flush against the footer. Give that form `className="flex flex-col gap-(--card-spacing)"`.
+- Do not leave sibling sections, fields, or actions touching. Use `gap-2`, `gap-4`, `gap-6`, or `--card-spacing`.
+
 ## Mobile
 
 - Mobile-first: style the small screen first, then add `sm` and `lg` enhancements.
