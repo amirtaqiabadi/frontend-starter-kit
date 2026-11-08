@@ -2,9 +2,9 @@
 
 Use this guide to build wallet list, top-up, history, gateway reverse, and card-refund screens. Login and the session cookie are documented in [frontend-login.md](./frontend-login.md).
 
-Money is stored in a ledger. Balances are **integers in rials** (not tomans). `availableBalance` is what the user can spend. `restrictedBalance` is included in the payload and is not changed by these flows; display it only if the product needs it. There is no separate balance field to cache: after every successful money call, reload `GET /api/wallets`.
+Money is stored in a ledger. Balances are **integers in rials** (not tomans). `availableBalance` is what the user can spend. `restrictedBalance` is included in the payload and is not changed by these flows; display it only if the product needs it. There is no separate balance field to cache: after every successful money call, reload `GET /api/v1/wallets`.
 
-A wallet is a team. `teamId` is the wallet id. The signed-in user must be an active `owner` to charge, read history, reverse, or refund. `GET /api/wallets` also returns other active roles. Hide charge, history, reverse, and refund unless `role` is `"owner"`.
+A wallet is a team. `teamId` is the wallet id. The signed-in user must be an active `owner` to charge, read history, reverse, or refund. `GET /api/v1/wallets` also returns other active roles. Hide charge, history, reverse, and refund unless `role` is `"owner"`.
 
 ## Transport
 
@@ -44,7 +44,7 @@ Rules:
 - POST body must be one JSON object.
 - You may send `x-request-id`. The server echoes it, truncated to 128 characters. Otherwise it generates one. Payment errors always include `error.traceId`, and the response header `x-request-id` is the same value. Show it on failure screens so support can find the attempt.
 
-`csrf-token` is `SameSite=Strict`. After the browser returns from the bank, that cookie is often absent. Call `GET /api/wallets` once before the next POST; the response stores a fresh `csrf-token`, then read it for `x-csrf-token`.
+`csrf-token` is `SameSite=Strict`. After the browser returns from the bank, that cookie is often absent. Call `GET /api/v1/wallets` once before the next POST; the response stores a fresh `csrf-token`, then read it for `x-csrf-token`.
 
 ## Payment return pages
 
@@ -84,26 +84,26 @@ On the success page, reload wallets. The new credit is a ledger row of type `Gat
 
 ```mermaid
 flowchart TD
-  list["GET /api/wallets"] --> create["POST /api/wallets"]
-  list --> charge["POST /api/payment/initiate"]
+  list["GET /api/v1/wallets"] --> create["POST /api/v1/wallets"]
+  list --> charge["POST /api/v1/payment/initiate"]
   create --> list
   charge --> bank[Redirect browser to paymentUrl]
   bank --> callback[API verifies and redirects]
   callback --> success[Success page]
   callback --> failure[Failure page]
   success --> list
-  failure --> recover["POST /api/payment/recover"]
-  list --> history["GET /api/wallets/{teamId}/transactions"]
-  history --> reverse["POST /api/payment/reverse"]
-  history --> refund["POST /api/payment/refunds"]
-  list --> refunds["GET /api/payment/refunds?teamId="]
+  failure --> recover["POST /api/v1/payment/recover"]
+  list --> history["GET /api/v1/wallets/{teamId}/transactions"]
+  history --> reverse["POST /api/v1/payment/reverse"]
+  history --> refund["POST /api/v1/payment/refunds"]
+  list --> refunds["GET /api/v1/payment/refunds?teamId="]
 ```
 
 ## Endpoints
 
 ### List wallets
 
-`GET /api/wallets`
+`GET /api/v1/wallets`
 
 `200`
 
@@ -127,7 +127,7 @@ Ordered by `teamId` ascending. An empty `displayName` is returned as `"Personal 
 
 ### Create a wallet
 
-`POST /api/wallets`
+`POST /api/v1/wallets`
 
 ```json
 { "displayName": "Travel" }
@@ -139,7 +139,7 @@ Ordered by `teamId` ascending. An empty `displayName` is returned as `"Personal 
 
 ### Charge
 
-`POST /api/payment/initiate`
+`POST /api/v1/payment/initiate`
 
 ```json
 {
@@ -170,7 +170,7 @@ Limits: 10 initiates per user and 20 per IP inside 10 minutes (`429 RATE_LIMITED
 
 ### Ledger
 
-`GET /api/wallets/{teamId}/transactions`
+`GET /api/v1/wallets/{teamId}/transactions`
 
 `teamId` is a positive integer. A bad path segment is `400 INVALID_BODY`. A wallet the caller does not own is `403 TEAM_FORBIDDEN`.
 
@@ -207,7 +207,7 @@ Format rials in the UI. Dividing by 10 for tomans is a display choice; send the 
 
 ### Reverse a top-up
 
-`POST /api/payment/reverse`
+`POST /api/v1/payment/reverse`
 
 ```json
 { "attemptId": 18 }
@@ -243,7 +243,7 @@ Reverse and card refund are mutually exclusive for one credit. An open refund (a
 
 ### Request a card refund
 
-`POST /api/payment/refunds`
+`POST /api/v1/payment/refunds`
 
 This does **not** call the gateway and does **not** change the balance. It stores a manual payout request for a later operator. Use it when reverse is no longer available.
 
@@ -276,7 +276,7 @@ One request per ledger row. A second one is `409 REFUND_EXISTS`. A row that is n
 
 ### List card refunds
 
-`GET /api/payment/refunds?teamId=4`
+`GET /api/v1/payment/refunds?teamId=4`
 
 `teamId` is required and must be a positive integer. Owner only.
 
@@ -302,7 +302,7 @@ Newest first. `status` is `pending`, `processing`, `paid`, `rejected`, or `faile
 
 ### Recover a missed bank return
 
-`POST /api/payment/recover`
+`POST /api/v1/payment/recover`
 
 ```json
 { "authority": "A00000000000000000000000000123456789" }

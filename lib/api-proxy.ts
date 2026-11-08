@@ -24,7 +24,7 @@ const RESPONSE_HEADERS = [
   "x-request-id",
 ]
 
-/** Forwards /api to the backend while keeping Origin and Host aligned. */
+/** Forwards the incoming /api path, including /api/v1, while keeping Origin and Host aligned. */
 export async function proxyApiRequest(request: Request) {
   const api = new URL(API_ORIGIN)
   const incoming = new URL(request.url)

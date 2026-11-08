@@ -70,7 +70,7 @@ describe("listWallets", () => {
       },
     ])
     expect(fetch).toHaveBeenCalledWith(
-      "/api/wallets",
+      "/api/v1/wallets",
       expect.objectContaining({
         credentials: "include",
       })
