@@ -88,9 +88,14 @@ export function formatTehranDateTime(isoUtc: string, now = new Date()) {
     return ""
   }
 
+  const timePart = tehranTime.format(date)
+  const relative = relativeTehranDate(date, now)
+  if (relative === "امروز" || relative === "دیروز") {
+    return `ساعت ${timePart} · ${relative}`
+  }
+
   const sameYear = jalaliYear(date) === jalaliYear(now)
   const datePart = (sameYear ? tehranDateWithoutYear : tehranDate).format(date)
-  const timePart = tehranTime.format(date)
 
-  return `${datePart}، ساعت ${timePart} · ${relativeTehranDate(date, now)}`
+  return `${datePart}، ساعت ${timePart} · ${relative}`
 }

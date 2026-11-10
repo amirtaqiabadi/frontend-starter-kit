@@ -43,6 +43,14 @@ export const Guest: Story = {
   args: {
     preview: "guest",
   },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "پیش‌نمایش مهمان. صفحهٔ /account اگر نشست نباشد به ورود برمی‌گردد.",
+      },
+    },
+  },
 }
 
 export const Error: Story = {
@@ -70,7 +78,7 @@ export const WithWallet: Story = {
     docs: {
       description: {
         story:
-          "دکمه خروج اول مودال تأیید را باز می‌کند. خروج فقط بعد از تأیید انجام می‌شود.",
+          "دکمه ذخیره کنار نام است و فقط بعد از تغییر نام یا تصویر دیده می‌شود. دکمه خروج اول مودال تأیید را باز می‌کند.",
       },
     },
   },

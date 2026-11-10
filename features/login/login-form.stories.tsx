@@ -13,6 +13,7 @@ const meta = {
     },
     initialPhone: { control: "text" },
     initialDevCode: { control: "text" },
+    initialResendIn: { control: "number" },
     inviteToken: { control: "text" },
     next: { control: "text" },
   },
@@ -56,6 +57,7 @@ export const Otp: Story = {
     initialStep: "otp",
     initialPhone: "09123456789",
     initialDevCode: "12345",
+    initialResendIn: 120,
   },
 }
 

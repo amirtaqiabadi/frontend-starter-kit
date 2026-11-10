@@ -30,6 +30,14 @@ export const WithImage: Story = {
     value: sampleAvatar,
     imageLabel: "تصویر سارا محمدی",
   },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "آواتار وسط‌چین و بزرگ‌تر است و دکمهٔ تصویر زیر آن قرار دارد. اندازهٔ فایل نشان داده نمی‌شود.",
+      },
+    },
+  },
 }
 
 export const Disabled: Story = {

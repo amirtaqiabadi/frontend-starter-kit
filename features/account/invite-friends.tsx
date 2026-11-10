@@ -14,13 +14,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { inviteUrl } from "@/features/account/invite-code"
 import { fetchAuthToken, isLoginApiError } from "@/features/login/login-api"
 import { loginPath } from "@/features/login/redirect-path"
-
-const fieldClassName = "h-11 text-base md:text-base"
 
 type InviteFriendsProps = {
   code?: string
@@ -166,32 +163,10 @@ function InviteCard({ code }: { code: string }) {
       <CardHeader>
         <CardTitle>دعوت دوستان</CardTitle>
         <CardDescription>
-          کد یا لینک را برای دوستانتان بفرستید تا با آن وارد شوند.
+          لینک دعوت را برای دوستانتان ارسال کنید.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <FormField id="invite-code" label="کد دعوت">
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Input
-              id="invite-code"
-              readOnly
-              dir="ltr"
-              className={fieldClassName}
-              value={code}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 w-full shrink-0 sm:w-auto"
-              onClick={() => {
-                void copy(code, "کد کپی شد.")
-              }}
-            >
-              <CopyIcon />
-              کپی کد
-            </Button>
-          </div>
-        </FormField>
         <FormField id="invite-link" label="لینک دعوت">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
             <a

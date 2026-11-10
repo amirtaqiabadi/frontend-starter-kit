@@ -147,7 +147,7 @@ describe("AvatarUploader", () => {
     expect(file.type).toBe("image/webp")
     expect(file.name.endsWith(".webp")).toBe(true)
     expect(file.size).toBeLessThanOrEqual(200 * 1024)
-    expect(screen.getByRole("status").textContent).toContain("کیلوبایت")
+    expect(screen.queryByText(/کیلوبایت/)).toBeNull()
     expect(
       screen.getByRole("img", { name: "آواتار" }).style.backgroundImage
     ).toContain(EXISTING)

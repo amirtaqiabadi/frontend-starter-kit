@@ -47,8 +47,7 @@ export function ImageCropDialog({
         <DialogHeader>
           <DialogTitle>برش تصویر</DialogTitle>
           <DialogDescription>
-            ناحیه را جابه‌جا یا بزرگ کنید. پیش‌نمایش دایره است و فایل نهایی مربع
-            می‌ماند.
+            با جابه‌جایی یا بزرگنمایی پروفایل خود را کراپ کنید.
           </DialogDescription>
         </DialogHeader>
         <div className="relative h-64 w-full overflow-hidden rounded-lg bg-muted sm:h-80">
