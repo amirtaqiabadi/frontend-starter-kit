@@ -16,6 +16,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -360,15 +368,30 @@ function AccountError({
   )
 }
 
-/** Clears the browser session and returns to the login screen. */
+/** Asks for confirmation, then clears the session and returns to login. */
 function SignOutButton({ preview = false }: { preview?: boolean }) {
   const router = useRouter()
+  const [open, setOpen] = useState(false)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState("")
   useBlockUnload(pending)
 
+  function closeConfirm() {
+    if (pending) {
+      return
+    }
+
+    setOpen(false)
+    setError("")
+  }
+
   async function signOut() {
-    if (preview || pending) {
+    if (pending) {
+      return
+    }
+
+    if (preview) {
+      closeConfirm()
       return
     }
 
@@ -386,25 +409,64 @@ function SignOutButton({ preview = false }: { preview?: boolean }) {
   }
 
   return (
-    <div className="flex flex-col items-start gap-2">
+    <>
       <Button
         type="button"
         variant="outline"
         className="h-11 w-full sm:w-auto"
         disabled={pending}
-        onClick={() => {
-          void signOut()
+        onClick={() => setOpen(true)}
+      >
+        خروج از حساب کاربری
+      </Button>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (next) {
+            setOpen(true)
+            return
+          }
+          closeConfirm()
         }}
       >
-        {pending ? <LoaderCircleIcon className="animate-spin" /> : null}
-        {pending ? "در حال خروج" : "خروج از حساب کاربری"}
-      </Button>
-      {error ? (
-        <p className="text-sm text-destructive" role="alert">
-          {error}
-        </p>
-      ) : null}
-    </div>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>خروج از حساب کاربری</DialogTitle>
+            <DialogDescription>
+              اگر می‌خواهید خارج شوید بر روی خروج بزنید.
+            </DialogDescription>
+          </DialogHeader>
+          {error ? (
+            <p className="text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          ) : null}
+          <DialogFooter className="flex-col sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 w-full sm:w-auto"
+              disabled={pending}
+              onClick={closeConfirm}
+            >
+              انصراف
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              className="h-11 w-full sm:w-auto"
+              disabled={pending}
+              onClick={() => {
+                void signOut()
+              }}
+            >
+              {pending ? <LoaderCircleIcon className="animate-spin" /> : null}
+              {pending ? "در حال خروج" : "خروج"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 

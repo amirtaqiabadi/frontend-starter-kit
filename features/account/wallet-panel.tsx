@@ -10,9 +10,7 @@ import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card"
 import {
   Dialog,
@@ -37,6 +35,8 @@ import { toAsciiDigits, toPersianDigits } from "@/lib/digits"
 import {
   formatToman,
   formatTomanInput,
+  formatTomanWords,
+  limitTomanInput,
   tomanCaretIndex,
   tomanInputToRial,
 } from "@/lib/money"
@@ -62,6 +62,7 @@ import {
   isWalletOwner,
   MAX_WALLET_NAME_LENGTH,
   MIN_CHARGE_RIAL,
+  MAX_CHARGE_TOMAN,
   refundForTransaction,
   refundStatusLabel,
   transactionLabel,
@@ -234,6 +235,10 @@ export function WalletPanel({
       )
       return
     }
+    if (amountRial > MAX_CHARGE_TOMAN * 10) {
+      setChargeError(`حداکثر مبلغ ${formatToman(MAX_CHARGE_TOMAN * 10)} است.`)
+      return
+    }
 
     void runAction("charge", async () => {
       if (preview) {
@@ -395,26 +400,21 @@ export function WalletPanel({
 
   return (
     <Card>
-      <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex flex-col gap-1.5">
-          <CardTitle>کیف پول</CardTitle>
-          <CardDescription>
-            مبلغ‌ها به تومان نمایش داده می‌شوند. شارژ از درگاه زرین‌پال انجام
-            می‌شود.
-          </CardDescription>
-        </div>
-        <Button
-          variant="outline"
-          className="h-11"
-          disabled={pending !== ""}
-          onClick={() => {
-            setCreateError("")
-            setCreateOpen(true)
-          }}
-        >
-          کیف پول جدید
-        </Button>
-      </CardHeader>
+      {wallets.length === 0 ? (
+        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <Button
+            variant="outline"
+            className="h-11"
+            disabled={pending !== ""}
+            onClick={() => {
+              setCreateError("")
+              setCreateOpen(true)
+            }}
+          >
+            کیف پول جدید
+          </Button>
+        </CardHeader>
+      ) : null}
       <CardContent className="flex flex-col gap-6">
         {wallets.length > 1 ? (
           <FormField id="wallet" label="کیف پول">
@@ -446,7 +446,8 @@ export function WalletPanel({
           </FormField>
         ) : null}
 
-        {selected ? (
+        {selected &&
+        (selected.availableBalance !== 0 || selected.restrictedBalance > 0) ? (
           <div className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-sm text-muted-foreground">
@@ -458,18 +459,18 @@ export function WalletPanel({
                 </Badge>
               ) : null}
             </div>
-            <p className="text-2xl font-medium">
-              {formatToman(selected.availableBalance)}
-            </p>
+            {selected.availableBalance !== 0 ? (
+              <p className="text-2xl font-medium">
+                {formatToman(selected.availableBalance)}
+              </p>
+            ) : null}
             {selected.restrictedBalance > 0 ? (
               <p className="text-sm text-muted-foreground">
                 موجودی محدود: {formatToman(selected.restrictedBalance)}
               </p>
             ) : null}
           </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">کیف پولی ندارید.</p>
-        )}
+        ) : null}
 
         {canCharge ? (
           <Dialog
@@ -494,10 +495,6 @@ export function WalletPanel({
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>افزایش موجودی</DialogTitle>
-                <DialogDescription>
-                  مبلغ را به تومان وارد کنید. پس از تأیید به درگاه زرین‌پال
-                  می‌روید.
-                </DialogDescription>
               </DialogHeader>
               <form className="flex flex-col gap-4" onSubmit={submitCharge}>
                 <TomanField
@@ -514,7 +511,11 @@ export function WalletPanel({
                   <Button
                     type="submit"
                     className="h-11 w-full"
-                    disabled={pending !== "" || lockIn > 0}
+                    disabled={
+                      pending !== "" ||
+                      lockIn > 0 ||
+                      tomanInputToRial(chargeAmount) < MIN_CHARGE_RIAL
+                    }
                   >
                     {pending === "charge" ? (
                       <LoaderCircleIcon className="animate-spin" />
@@ -687,44 +688,42 @@ function HistorySection({
 }) {
   return (
     <>
-      <section className="flex flex-col gap-2">
-        <h2 className="text-base font-medium">تراکنش‌ها</h2>
-        {detailsLoading ? (
-          <Skeleton className="h-24" />
-        ) : transactions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">تراکنشی ثبت نشده است.</p>
-        ) : (
-          <ul className="flex flex-col">
-            {transactions.map((transaction) => (
-              <TransactionRow
-                key={transaction.id}
-                transaction={transaction}
-                transactions={transactions}
-                refunds={refunds}
-                pending={pending}
-                onReverse={onReverse}
-                onRefund={onRefund}
-              />
-            ))}
-          </ul>
-        )}
-      </section>
-      <section className="flex flex-col gap-2">
-        <h2 className="text-base font-medium">درخواست‌های استرداد</h2>
-        {detailsLoading ? (
-          <Skeleton className="h-16" />
-        ) : refunds.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            درخواست استردادی ثبت نشده است.
-          </p>
-        ) : (
-          <ul className="flex flex-col">
-            {refunds.map((refund) => (
-              <RefundRow key={refund.id} refund={refund} />
-            ))}
-          </ul>
-        )}
-      </section>
+      {detailsLoading || transactions.length > 0 ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-base font-medium">تراکنش‌ها</h2>
+          {detailsLoading ? (
+            <Skeleton className="h-24" />
+          ) : (
+            <ul className="flex flex-col">
+              {transactions.map((transaction) => (
+                <TransactionRow
+                  key={transaction.id}
+                  transaction={transaction}
+                  transactions={transactions}
+                  refunds={refunds}
+                  pending={pending}
+                  onReverse={onReverse}
+                  onRefund={onRefund}
+                />
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
+      {detailsLoading || refunds.length > 0 ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-base font-medium">درخواست‌های استرداد</h2>
+          {detailsLoading ? (
+            <Skeleton className="h-16" />
+          ) : (
+            <ul className="flex flex-col">
+              {refunds.map((refund) => (
+                <RefundRow key={refund.id} refund={refund} />
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
     </>
   )
 }
@@ -838,9 +837,11 @@ function TomanField({
   error: string
   onChange: (value: string) => void
 }) {
-  const describedBy = [error ? `${id}-error` : "", `${id}-suffix`]
+  const words = formatTomanWords(value)
+  const describedBy = [error ? `${id}-error` : "", `${id}-hint`, `${id}-suffix`]
     .filter(Boolean)
     .join(" ")
+  const placeholder = "مثال: ۹۸.۰۰۰"
 
   function onAmountChange(event: React.ChangeEvent<HTMLInputElement>) {
     const input = event.target
@@ -848,9 +849,11 @@ function TomanField({
     const digitsBeforeCaret = toAsciiDigits(
       input.value.slice(0, caret)
     ).replace(/\D/g, "").length
-    const next = formatTomanInput(input.value)
+    const raw = formatTomanInput(input.value)
+    const next = limitTomanInput(input.value, MAX_CHARGE_TOMAN)
     onChange(next)
-    const nextCaret = tomanCaretIndex(next, digitsBeforeCaret)
+    const nextCaret =
+      next === raw ? tomanCaretIndex(next, digitsBeforeCaret) : next.length
     window.requestAnimationFrame(() => {
       input.setSelectionRange(nextCaret, nextCaret)
     })
@@ -858,25 +861,48 @@ function TomanField({
 
   return (
     <FormField id={id} label={label} error={error}>
-      <div className="relative" dir="ltr">
-        <Input
-          id={id}
-          name={id}
-          className={`${fieldClassName} ps-16 text-end`}
-          dir="ltr"
-          inputMode="numeric"
-          autoComplete="off"
-          value={value}
-          aria-invalid={Boolean(error) || undefined}
-          aria-describedby={describedBy}
-          onChange={onAmountChange}
-        />
-        <span
-          id={`${id}-suffix`}
-          className="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-2.5 text-sm text-muted-foreground"
+      <div className="flex flex-col gap-2">
+        <div className="relative" dir="ltr">
+          <Input
+            id={id}
+            name={id}
+            className={`${fieldClassName} ps-16 text-end text-xl font-bold md:text-xl placeholder:text-transparent`}
+            dir="ltr"
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder={placeholder}
+            value={value}
+            aria-invalid={Boolean(error) || undefined}
+            aria-describedby={describedBy}
+            onChange={onAmountChange}
+          />
+          {value ? null : (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 end-0 flex items-center pe-2.5"
+            >
+              <span dir="rtl" className="text-base font-normal text-muted-foreground">
+                {placeholder}
+              </span>
+            </span>
+          )}
+          <span
+            id={`${id}-suffix`}
+            className="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-2.5 text-sm text-muted-foreground"
+          >
+            تومان
+          </span>
+        </div>
+        <div
+          id={`${id}-hint`}
+          className="flex min-h-5 items-center text-sm leading-5 text-muted-foreground"
         >
-          تومان
-        </span>
+          {words ? (
+            words
+          ) : (
+            <Skeleton aria-hidden className="h-3 w-36" />
+          )}
+        </div>
       </div>
     </FormField>
   )

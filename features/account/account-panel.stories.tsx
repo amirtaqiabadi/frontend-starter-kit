@@ -66,6 +66,14 @@ export const WithWallet: Story = {
       wallets: [ownedWallet],
     },
   },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "دکمه خروج اول مودال تأیید را باز می‌کند. خروج فقط بعد از تأیید انجام می‌شود.",
+      },
+    },
+  },
 }
 
 export const Member: Story = {

@@ -71,6 +71,9 @@ const preview: Preview = {
     },
   },
   parameters: {
+    nextjs: {
+      appDirectory: true,
+    },
     layout: "fullscreen",
     controls: {
       matchers: {

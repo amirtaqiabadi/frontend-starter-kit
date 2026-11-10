@@ -6,9 +6,15 @@ import {
   type ChangeEvent,
   type Dispatch,
   type FormEvent,
+  type ReactNode,
   type SetStateAction,
 } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { ArrowLeftIcon, HomeIcon } from "lucide-react"
+
+import { DirectionalIcon } from "@/components/atoms/directional-icon"
+import { Button, buttonVariants } from "@/components/ui/button"
 
 import { signInAccount } from "@/features/account/account-store"
 import {
@@ -50,6 +56,7 @@ export type LoginStep =
 type LoginFormProps = {
   initialStep?: LoginStep
   initialPhone?: string
+  initialDevCode?: string
   next?: string
   inviteToken?: string
 }
@@ -58,6 +65,7 @@ type LoginFormProps = {
 export function LoginForm({
   initialStep = "phone",
   initialPhone = "",
+  initialDevCode = "",
   next,
   inviteToken,
 }: LoginFormProps) {
@@ -71,7 +79,7 @@ export function LoginForm({
   const [pending, setPending] = useState(false)
   const [resendIn, setResendIn] = useState(0)
   const [lockIn, setLockIn] = useState(0)
-  const [devCode, setDevCode] = useState("")
+  const [devCode, setDevCode] = useState(initialDevCode)
   const [otpPurpose, setOtpPurpose] = useState<OtpPurpose>(
     initialStep === "reset-password" ? "RESET_PASSWORD" : "LOGIN"
   )
@@ -199,6 +207,17 @@ export function LoginForm({
     }, "resend")
   }
 
+  async function loginWithCode() {
+    const phoneNumber = readPhone()
+    if (!phoneNumber || pending) {
+      return
+    }
+
+    await runRequest(async () => {
+      await sendOtp(phoneNumber, "LOGIN")
+    })
+  }
+
   async function forgotPassword() {
     const phoneNumber = readPhone()
     if (!phoneNumber || pending) {
@@ -208,14 +227,6 @@ export function LoginForm({
     await runRequest(async () => {
       await sendOtp(phoneNumber, "RESET_PASSWORD")
     })
-  }
-
-  function skipSetPassword() {
-    if (pending) {
-      return
-    }
-
-    finishLogin(pendingRedirect)
   }
 
   function editPhone() {
@@ -347,8 +358,10 @@ export function LoginForm({
     router.push(safeRedirectPath(path))
   }
 
+  let stepView: ReactNode
+
   if (step === "password") {
-    return (
+    stepView = (
       <PasswordStep
         phone={phone}
         password={password}
@@ -361,13 +374,11 @@ export function LoginForm({
         }}
         onSubmit={submitPassword}
         onForgotPassword={forgotPassword}
-        onEditPhone={editPhone}
+        onLoginWithCode={loginWithCode}
       />
     )
-  }
-
-  if (step === "otp") {
-    return (
+  } else if (step === "otp") {
+    stepView = (
       <OtpStep
         phone={phone}
         otp={otp}
@@ -382,13 +393,10 @@ export function LoginForm({
         }}
         onSubmit={submitOtp}
         onResend={resendCode}
-        onEditPhone={editPhone}
       />
     )
-  }
-
-  if (step === "set-password" || step === "reset-password") {
-    return (
+  } else if (step === "set-password" || step === "reset-password") {
+    stepView = (
       <PasswordCreateStep
         mode={step === "reset-password" ? "reset" : "set"}
         password={password}
@@ -400,20 +408,50 @@ export function LoginForm({
           setError("")
         }}
         onSubmit={submitNewPassword}
-        onSkip={step === "set-password" ? skipSetPassword : undefined}
+      />
+    )
+  } else {
+    stepView = (
+      <PhoneStep
+        phone={phone}
+        error={error}
+        pending={pending}
+        lockIn={lockIn}
+        onPhoneChange={onPhoneChange}
+        onSubmit={submitPhone}
       />
     )
   }
 
+  const correctPhone = step === "otp" || step === "password"
+
   return (
-    <PhoneStep
-      phone={phone}
-      error={error}
-      pending={pending}
-      lockIn={lockIn}
-      onPhoneChange={onPhoneChange}
-      onSubmit={submitPhone}
-    />
+    <div className="flex flex-col gap-6">
+      {correctPhone ? (
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-11 w-fit"
+          disabled={pending}
+          onClick={editPhone}
+        >
+          <DirectionalIcon icon={ArrowLeftIcon} />
+          برگشت و اصلاح شماره
+        </Button>
+      ) : (
+        <Link
+          href="/"
+          className={buttonVariants({
+            variant: "ghost",
+            className: "h-11 w-fit",
+          })}
+        >
+          <HomeIcon aria-hidden />
+          برو به خانه
+        </Link>
+      )}
+      {stepView}
+    </div>
   )
 }
 

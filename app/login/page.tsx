@@ -1,9 +1,5 @@
 import type { Metadata } from "next"
-import Link from "next/link"
-import { ArrowLeftIcon } from "lucide-react"
 
-import { DirectionalIcon } from "@/components/atoms/directional-icon"
-import { buttonVariants } from "@/components/ui/button"
 import { LoginForm } from "@/features/login/login-form"
 
 export const metadata: Metadata = {
@@ -29,20 +25,7 @@ export default async function LoginPage({
   const { next, token } = await searchParams
 
   return (
-    <main className="mx-auto flex min-h-svh w-full max-w-md flex-col justify-center gap-6 px-4 py-8">
-      <div className="flex flex-col gap-2">
-        <Link
-          href="/"
-          className={buttonVariants({
-            variant: "ghost",
-            className: "h-11 w-fit",
-          })}
-        >
-          <DirectionalIcon icon={ArrowLeftIcon} />
-          برگشت
-        </Link>
-        <h1 className="text-2xl font-medium">ورود</h1>
-      </div>
+    <main className="mx-auto flex min-h-svh w-full max-w-md flex-col justify-center px-4 py-8">
       <LoginForm next={firstQuery(next)} inviteToken={firstQuery(token)} />
     </main>
   )
