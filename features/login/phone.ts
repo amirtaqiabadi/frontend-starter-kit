@@ -70,3 +70,9 @@ export function formatIranMobile(value: string) {
 export function normalizeOtp(value: string) {
   return toAsciiDigits(value).replace(/\D/g, "").slice(0, OTP_LENGTH)
 }
+
+/** Returns the code when the text contains exactly OTP_LENGTH digits. */
+export function otpFromClipboard(value: string) {
+  const digits = toAsciiDigits(value).replace(/\D/g, "")
+  return digits.length === OTP_LENGTH ? digits : ""
+}

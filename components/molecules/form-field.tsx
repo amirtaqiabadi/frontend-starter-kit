@@ -13,6 +13,7 @@ type FormFieldProps = {
   children: ReactNode
   error?: string
   hint?: string
+  labelHidden?: boolean
 }
 
 /** Label, control, and optional hint or error for one field. */
@@ -22,13 +23,16 @@ export function FormField({
   children,
   error = "",
   hint = "",
+  labelHidden = false,
 }: FormFieldProps) {
   const invalid = error.length > 0
   const describedBy = invalid ? `${id}-error` : hint ? `${id}-hint` : undefined
 
   return (
     <Field data-invalid={invalid || undefined}>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <FieldLabel htmlFor={id} className={labelHidden ? "sr-only" : undefined}>
+        {label}
+      </FieldLabel>
       <div aria-describedby={describedBy}>{children}</div>
       {hint ? (
         <FieldDescription id={`${id}-hint`}>{hint}</FieldDescription>

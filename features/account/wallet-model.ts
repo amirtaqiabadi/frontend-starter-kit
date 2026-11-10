@@ -1,4 +1,5 @@
 export const MIN_CHARGE_RIAL = 1000
+export const MAX_CHARGE_TOMAN = 100_000_000
 export const MAX_WALLET_NAME_LENGTH = 80
 export const REVERSE_WINDOW_MS = 30 * 60 * 1000
 export const CHARGE_DESCRIPTION = "شارژ کیف پول"

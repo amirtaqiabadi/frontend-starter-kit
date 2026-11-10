@@ -53,8 +53,8 @@ const meta = {
   title: "Features/Wallet",
   component: WalletPanel,
   tags: ["autodocs"],
-  parameters: {
-    controls: { disable: true },
+  argTypes: {
+    preview: { control: "boolean" },
   },
   args: {
     preview: true,
@@ -69,6 +69,14 @@ type Story = StoryObj<typeof meta>
 export const Empty: Story = {
   args: {
     initialWallets: [],
+  },
+}
+
+export const ZeroBalance: Story = {
+  args: {
+    initialWallets: [personalWallet],
+    initialTransactions: [],
+    initialRefunds: [],
   },
 }
 

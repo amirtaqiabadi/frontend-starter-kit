@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite"
 
+import { WalletPageHeader } from "./wallet-page-header"
 import { WalletScreen } from "./wallet-screen"
 import type { LedgerTransaction, Wallet } from "./wallet-model"
 
@@ -28,6 +29,14 @@ const meta = {
   parameters: {
     controls: { disable: true },
   },
+  decorators: [
+    (Story) => (
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
+        <WalletPageHeader />
+        <Story />
+      </div>
+    ),
+  ],
 } satisfies Meta<typeof WalletScreen>
 
 export default meta

@@ -6,9 +6,17 @@ const meta = {
   title: "Features/Login",
   component: LoginForm,
   tags: ["autodocs"],
-  parameters: {
-    controls: { disable: true },
+  argTypes: {
+    initialStep: {
+      control: "select",
+      options: ["phone", "password", "otp", "set-password", "reset-password"],
+    },
+    initialPhone: { control: "text" },
+    initialDevCode: { control: "text" },
+    inviteToken: { control: "text" },
+    next: { control: "text" },
   },
+  render: (args) => <LoginForm key={JSON.stringify(args)} {...args} />,
 } satisfies Meta<typeof LoginForm>
 
 export default meta
@@ -47,6 +55,7 @@ export const Otp: Story = {
   args: {
     initialStep: "otp",
     initialPhone: "09123456789",
+    initialDevCode: "12345",
   },
 }
 
