@@ -57,6 +57,7 @@ type LoginFormProps = {
   initialStep?: LoginStep
   initialPhone?: string
   initialDevCode?: string
+  initialResendIn?: number
   next?: string
   inviteToken?: string
 }
@@ -66,6 +67,7 @@ export function LoginForm({
   initialStep = "phone",
   initialPhone = "",
   initialDevCode = "",
+  initialResendIn = 0,
   next,
   inviteToken,
 }: LoginFormProps) {
@@ -77,7 +79,9 @@ export function LoginForm({
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [pending, setPending] = useState(false)
-  const [resendIn, setResendIn] = useState(0)
+  const [resendIn, setResendIn] = useState(() =>
+    initialResendIn > 0 ? Math.floor(initialResendIn) : 0
+  )
   const [lockIn, setLockIn] = useState(0)
   const [devCode, setDevCode] = useState(initialDevCode)
   const [otpPurpose, setOtpPurpose] = useState<OtpPurpose>(

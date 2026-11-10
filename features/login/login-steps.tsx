@@ -324,8 +324,28 @@ export function OtpStep({
   const [pasting, setPasting] = useState(false)
   const [pasteError, setPasteError] = useState("")
   const formRef = useRef<HTMLFormElement>(null)
+  const otpInputRef = useRef<HTMLInputElement>(null)
   const submittedCode = useRef("")
   const shownError = pasteError || error
+  const canConfirmOtp = otp.length > 0 && resendIn > 0
+  const showDevCode = devCode.length > 0 && resendIn > 0
+
+  /** Puts the caret on the last digit after a rejected code. */
+  useEffect(() => {
+    if (pending || !error) {
+      return
+    }
+
+    const input = otpInputRef.current
+    if (!input) {
+      return
+    }
+
+    const end = input.value.length
+    const start = end >= OTP_LENGTH ? end - 1 : end
+    input.focus()
+    input.setSelectionRange(start, end)
+  }, [error, pending])
 
   /** Submits once, when the fifth digit arrives. */
   useEffect(() => {
@@ -334,7 +354,12 @@ export function OtpStep({
       return
     }
 
-    if (pending || lockIn > 0 || submittedCode.current === otp) {
+    if (
+      pending ||
+      lockIn > 0 ||
+      resendIn <= 0 ||
+      submittedCode.current === otp
+    ) {
       return
     }
 
@@ -345,7 +370,17 @@ export function OtpStep({
 
     submittedCode.current = otp
     form.requestSubmit()
-  }, [lockIn, otp, pending])
+  }, [lockIn, otp, pending, resendIn])
+
+  /** Drops a submit once the resend window has closed. */
+  function submitCode(event: FormEvent<HTMLFormElement>) {
+    if (resendIn <= 0) {
+      event.preventDefault()
+      return
+    }
+
+    onSubmit(event)
+  }
 
   function changeOtp(value: string) {
     setPasteError("")
@@ -393,12 +428,13 @@ export function OtpStep({
         <form
           ref={formRef}
           className="flex flex-col gap-(--card-spacing)"
-          onSubmit={onSubmit}
+          onSubmit={submitCode}
         >
           <CardContent>
             <FormField id="otp" label="کد تأیید" labelHidden error={shownError}>
               <div className="flex flex-wrap items-center justify-center gap-2 text-foreground">
                 <InputOTP
+                  ref={otpInputRef}
                   id="otp"
                   name="otp"
                   maxLength={OTP_LENGTH}
@@ -445,7 +481,7 @@ export function OtpStep({
             </FormField>
           </CardContent>
           <CardFooter className="flex-col items-stretch gap-2">
-            {otp.length > 0 ? (
+            {canConfirmOtp ? (
               <PendingButton
                 pending={pending}
                 lockIn={lockIn}
@@ -457,7 +493,7 @@ export function OtpStep({
             ) : null}
             <Button
               type="button"
-              variant="ghost"
+              variant={resendIn > 0 ? "ghost" : "default"}
               className="h-11 w-full"
               disabled={pending || resendIn > 0}
               onClick={onResend}
@@ -469,7 +505,7 @@ export function OtpStep({
           </CardFooter>
         </form>
       </LoginStepCard>
-      {devCode ? <DevCodeBanner code={devCode} /> : null}
+      {showDevCode ? <DevCodeBanner code={devCode} /> : null}
     </>
   )
 }
