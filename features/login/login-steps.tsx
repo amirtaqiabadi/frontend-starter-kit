@@ -334,12 +334,7 @@ export function OtpStep({
       return
     }
 
-    if (
-      pending ||
-      lockIn > 0 ||
-      resendIn === 0 ||
-      submittedCode.current === otp
-    ) {
+    if (pending || lockIn > 0 || submittedCode.current === otp) {
       return
     }
 
@@ -350,7 +345,7 @@ export function OtpStep({
 
     submittedCode.current = otp
     form.requestSubmit()
-  }, [lockIn, otp, pending, resendIn])
+  }, [lockIn, otp, pending])
 
   function changeOtp(value: string) {
     setPasteError("")
@@ -450,7 +445,7 @@ export function OtpStep({
             </FormField>
           </CardContent>
           <CardFooter className="flex-col items-stretch gap-2">
-            {otp.length > 0 && resendIn > 0 ? (
+            {otp.length > 0 ? (
               <PendingButton
                 pending={pending}
                 lockIn={lockIn}

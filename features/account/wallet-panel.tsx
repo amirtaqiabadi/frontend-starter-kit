@@ -514,7 +514,7 @@ export function WalletPanel({
                     disabled={
                       pending !== "" ||
                       lockIn > 0 ||
-                      toAsciiDigits(chargeAmount).replace(/\D/g, "").length < 4
+                      tomanInputToRial(chargeAmount) < MIN_CHARGE_RIAL
                     }
                   >
                     {pending === "charge" ? (
