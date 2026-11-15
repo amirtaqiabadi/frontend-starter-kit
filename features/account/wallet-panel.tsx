@@ -68,7 +68,7 @@ import { loginPath } from "@/features/login/redirect-path"
 
 const fieldClassName = "h-11 text-base"
 
-type PendingAction = "" | "charge" | "refund" | "withdraw"
+type PendingAction = "" | "charge" | "refund"
 
 export type WalletPanelProps = {
   initialWallets: Wallet[]
@@ -96,14 +96,9 @@ export function WalletPanel({
   )
   const [detailsNonce, setDetailsNonce] = useState(0)
   const [chargeOpen, setChargeOpen] = useState(false)
-  const [withdrawOpen, setWithdrawOpen] = useState(false)
   const [chargeAmount, setChargeAmount] = useState("")
-  const [withdrawAmount, setWithdrawAmount] = useState("")
-  const [withdrawCard, setWithdrawCard] = useState("")
   const [cardNumber, setCardNumber] = useState("")
   const [chargeError, setChargeError] = useState("")
-  const [withdrawError, setWithdrawError] = useState("")
-  const [withdrawCardError, setWithdrawCardError] = useState("")
   const [cardError, setCardError] = useState("")
   const [actionError, setActionError] = useState<WalletApiError | null>(null)
   const [notice, setNotice] = useState("")
@@ -121,11 +116,6 @@ export function WalletPanel({
     wallets.find((wallet) => wallet.teamId === selectedTeamId) ?? wallets[0]
   const canCharge = !selected || isWalletOwner(selected)
   const canManage = Boolean(selected && isWalletOwner(selected))
-  const showWithdraw = Boolean(
-    selected &&
-    isWalletOwner(selected) &&
-    Math.trunc(selected.availableBalance / 10) > 0
-  )
   const detailsLoading =
     !preview && canManage && fetchedTeamId !== selectedTeamId
   const walletItems = useMemo(
@@ -283,49 +273,6 @@ export function WalletPanel({
     })
   }
 
-  function submitWithdraw(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const amountRial = tomanInputToRial(withdrawAmount)
-    if (!amountRial) {
-      setWithdrawError("مبلغ را به تومان وارد کنید.")
-      return
-    }
-    if (!selected || amountRial > selected.availableBalance) {
-      setWithdrawError("مبلغ برداشت از موجودی بیشتر است.")
-      return
-    }
-    if (cardDigits(withdrawCard).length !== CARD_LENGTH) {
-      setWithdrawCardError("شماره کارت را ۱۶ رقم وارد کنید.")
-      return
-    }
-
-    const transaction = transactions.find(
-      (row) =>
-        row.amount === amountRial &&
-        canRequestRefund({ transaction: row, transactions, refunds })
-    )
-    if (!transaction) {
-      setWithdrawError("برای این مبلغ تراکنش قابل برداشتی نیست.")
-      return
-    }
-
-    void runAction("withdraw", async () => {
-      if (preview) {
-        applyPreviewRefund(transaction, withdrawCard)
-      } else {
-        await requestRefund({
-          transactionId: transaction.id,
-          cardNumber: withdrawCard,
-        })
-        await refresh()
-      }
-      setWithdrawAmount("")
-      setWithdrawCard("")
-      setWithdrawOpen(false)
-      setNotice("درخواست برداشت ثبت شد.")
-    })
-  }
-
   function applyPreviewCharge(amountRial: number) {
     const teamId = selected?.teamId ?? 1
     const nextWallet = selected
@@ -380,10 +327,6 @@ export function WalletPanel({
                   setRefunds([])
                   setNotice("")
                   setActionError(null)
-                  setWithdrawAmount("")
-                  setWithdrawCard("")
-                  setWithdrawError("")
-                  setWithdrawCardError("")
                 }
               }}
               items={walletItems}
@@ -478,82 +421,6 @@ export function WalletPanel({
                 </form>
               </DialogContent>
             </Dialog>
-            {showWithdraw ? (
-              <Dialog
-                open={withdrawOpen}
-                onOpenChange={(open) => {
-                  setWithdrawOpen(open)
-                  if (!open) {
-                    setWithdrawError("")
-                    setWithdrawCardError("")
-                  }
-                }}
-              >
-                <DialogTrigger
-                  render={
-                    <Button
-                      variant="outline"
-                      className="h-11 w-full sm:w-auto"
-                      disabled={pending !== "" || lockIn > 0 || detailsLoading}
-                    />
-                  }
-                >
-                  برداشت وجه
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>برداشت وجه</DialogTitle>
-                    <DialogDescription>
-                      مبلغ و شماره کارت مقصد را وارد کنید.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <form
-                    className="flex flex-col gap-4"
-                    onSubmit={submitWithdraw}
-                  >
-                    <TomanField
-                      id="withdraw-amount"
-                      label="مبلغ"
-                      value={withdrawAmount}
-                      error={withdrawError}
-                      maxToman={Math.trunc(
-                        (selected?.availableBalance ?? 0) / 10
-                      )}
-                      onChange={(value) => {
-                        setWithdrawAmount(value)
-                        setWithdrawError("")
-                      }}
-                    />
-                    <CardNumberField
-                      id="withdraw-card"
-                      value={withdrawCard}
-                      error={withdrawCardError}
-                      onChange={(value) => {
-                        setWithdrawCard(value)
-                        setWithdrawCardError("")
-                      }}
-                    />
-                    <DialogFooter>
-                      <Button
-                        type="submit"
-                        className="h-11 w-full"
-                        disabled={
-                          pending !== "" ||
-                          lockIn > 0 ||
-                          tomanInputToRial(withdrawAmount) <= 0 ||
-                          cardDigits(withdrawCard).length !== CARD_LENGTH
-                        }
-                      >
-                        {pending === "withdraw" ? (
-                          <LoaderCircleIcon className="animate-spin" />
-                        ) : null}
-                        {pending === "withdraw" ? "در حال ثبت" : "برداشت وجه"}
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
-            ) : null}
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -592,7 +459,9 @@ export function WalletPanel({
           <DialogHeader>
             <DialogTitle>استرداد به کارت</DialogTitle>
             <DialogDescription>
-              شماره کارت مقصد را وارد کنید. موجودی الان کم نمی‌شود.
+              استرداد کامل این تراکنش به مبلغ{" "}
+              {refundTarget ? formatToman(refundTarget.amount) : ""}. شماره کارت
+              مقصد را وارد کنید. موجودی الان کم نمی‌شود.
             </DialogDescription>
           </DialogHeader>
           <form className="flex flex-col gap-4" onSubmit={submitRefund}>

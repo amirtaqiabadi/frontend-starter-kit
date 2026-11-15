@@ -1,5 +1,5 @@
 import type { FormEvent } from "react"
-import { render, screen } from "@testing-library/react"
+import { fireEvent, render, screen } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 
 import { OtpStep } from "@/features/login/login-steps"
@@ -70,7 +70,7 @@ describe("OtpStep", () => {
     expect(input.selectionEnd).toBe(5)
   })
 
-  it("shows confirm only while a digit is entered and the resend timer is running", () => {
+  it("keeps confirmation available independently of the resend cooldown", () => {
     const view = renderOtp({ otp: "1", resendIn: 110 })
 
     expect(screen.getByRole("button", { name: "تایید کد" })).toHaveProperty(
@@ -108,7 +108,10 @@ describe("OtpStep", () => {
         onResend={vi.fn()}
       />
     )
-    expect(screen.queryByRole("button", { name: "تایید کد" })).toBeNull()
+    expect(screen.getByRole("button", { name: "تایید کد" })).toHaveProperty(
+      "disabled",
+      false
+    )
   })
 
   it("makes resend the primary action after the timer ends", () => {
@@ -160,14 +163,16 @@ describe("OtpStep", () => {
     expect(screen.queryByText("10884")).toBeNull()
   })
 
-  it("does not submit a full code after the resend timer ends", () => {
+  it("submits a full code after the resend cooldown and still allows a manual retry", () => {
     const onSubmit = vi.fn((event: FormEvent<HTMLFormElement>) => {
       event.preventDefault()
     })
 
     renderOtp({ otp: "12345", resendIn: 0, onSubmit })
 
-    expect(onSubmit).not.toHaveBeenCalled()
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+    fireEvent.submit(otpInput().closest("form")!)
+    expect(onSubmit).toHaveBeenCalledTimes(2)
   })
 
   it("leaves focus alone while the attempt is still running", () => {
