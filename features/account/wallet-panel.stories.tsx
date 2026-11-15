@@ -88,7 +88,7 @@ export const Owner: Story = {
   },
 }
 
-export const Withdrawable: Story = {
+export const Refundable: Story = {
   args: {
     initialWallets: [ownedWallet],
     initialTransactions: [olderCredit],

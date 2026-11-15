@@ -327,7 +327,7 @@ export function OtpStep({
   const otpInputRef = useRef<HTMLInputElement>(null)
   const submittedCode = useRef("")
   const shownError = pasteError || error
-  const canConfirmOtp = otp.length > 0 && resendIn > 0
+  const canConfirmOtp = otp.length > 0
   const showDevCode = devCode.length > 0 && resendIn > 0
 
   /** Puts the caret on the last digit after a rejected code. */
@@ -354,12 +354,7 @@ export function OtpStep({
       return
     }
 
-    if (
-      pending ||
-      lockIn > 0 ||
-      resendIn <= 0 ||
-      submittedCode.current === otp
-    ) {
+    if (pending || lockIn > 0 || submittedCode.current === otp) {
       return
     }
 
@@ -370,17 +365,7 @@ export function OtpStep({
 
     submittedCode.current = otp
     form.requestSubmit()
-  }, [lockIn, otp, pending, resendIn])
-
-  /** Drops a submit once the resend window has closed. */
-  function submitCode(event: FormEvent<HTMLFormElement>) {
-    if (resendIn <= 0) {
-      event.preventDefault()
-      return
-    }
-
-    onSubmit(event)
-  }
+  }, [lockIn, otp, pending])
 
   function changeOtp(value: string) {
     setPasteError("")
@@ -428,7 +413,7 @@ export function OtpStep({
         <form
           ref={formRef}
           className="flex flex-col gap-(--card-spacing)"
-          onSubmit={submitCode}
+          onSubmit={onSubmit}
         >
           <CardContent>
             <FormField id="otp" label="کد تأیید" labelHidden error={shownError}>
