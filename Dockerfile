@@ -11,14 +11,15 @@ FROM dependencies AS builder
 COPY . .
 ARG NEXT_PUBLIC_API_ORIGIN=""
 ENV NEXT_PUBLIC_API_ORIGIN=$NEXT_PUBLIC_API_ORIGIN
+RUN cp -RL public /app/public-assets
 RUN pnpm build
 
 FROM base AS runner
 ENV NODE_ENV=production \
     PORT=3000 \
     HOSTNAME=0.0.0.0
-COPY --from=builder --chown=node:node /app/public ./public
 COPY --from=builder --chown=node:node /app/.next/standalone ./
+COPY --from=builder --chown=node:node /app/public-assets ./public
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static
 USER node
 EXPOSE 3000
