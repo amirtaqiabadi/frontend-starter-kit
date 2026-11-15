@@ -30,6 +30,24 @@ pnpm storybook
 pnpm build-storybook
 ```
 
+## استقرار Docker روی لیارا
+
+فایل `Dockerfile` با Node.js 24 و pnpm 11.9.0، خروجی `standalone` می‌سازد و با کاربر غیر root روی پورت 3000 اجرا می‌کند. فایل‌های `.env*`، وابستگی‌های محلی و خروجی‌های قبلی در Docker و بستهٔ ارسالی لیارا قرار نمی‌گیرند.
+
+```bash
+docker build -t frontend-starter-kit .
+docker run --rm -p 3000:3000 frontend-starter-kit
+liara deploy --no-app-logs
+```
+
+فایل `liara.json` برنامهٔ `frontend-satrter-kit` را در تیم مشخص‌شده با محل ساخت آلمان هدف می‌گیرد. CLI باید قبلاً با `liara login` وارد حساب شده باشد.
+
+دو برنامهٔ فرانت‌اند و بک‌اند در شبکهٔ خصوصی `starter-kit` لیارا هستند. در متغیرهای محیطی برنامهٔ فرانت‌اند مقدار `API_ORIGIN=http://backend-starter-kit:3000` تنظیم شده است. تغییر این متغیر به ری‌استارت برنامه نیاز دارد. پراکسی فعلی هدر Host فرانت‌اند را حفظ می‌کند؛ بنابراین برای ارتباط با بک‌اند در لیارا از آدرس داخلی استفاده کنید، چون دامنهٔ عمومی بک‌اند با این هدر دوباره به فرانت‌اند مسیریابی می‌شود.
+
+مقدار `NEXT_PUBLIC_API_ORIGIN` به‌صورت پیش‌فرض خالی است تا مرورگر از پراکسی هم‌دامنهٔ `/api` استفاده کند. اگر اتصال مستقیم مرورگر لازم شد، آن را هنگام ساخت با `--build-arg NEXT_PUBLIC_API_ORIGIN=https://api.example.com` به Docker یا Liara CLI بدهید؛ این مقدار عمومی در فایل‌های مرورگر ثبت می‌شود و به تنظیم CORS و کوکی‌ها در بک‌اند نیاز دارد.
+
+راهنما: [استقرار Docker](https://docs.liara.ir/paas/docker/how-tos/deploy-app/) و [Liara CLI](https://docs.liara.ir/references/cli/deploy-app/).
+
 ## راست‌به‌چپ
 
 `components.json` مقدار `rtl: true` دارد و استایل `base-nova` است. CLI هنگام افزودن کامپوننت، کلاس فیزیکی را به کلاس منطقی تبدیل می‌کند. سند با `lang="fa"` و `dir="rtl"` و `DirectionProvider` تنظیم شده است. جزئیات و استثناها در [docs/rtl-shadcn.md](docs/rtl-shadcn.md) است.
