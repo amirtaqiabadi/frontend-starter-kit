@@ -324,8 +324,28 @@ export function OtpStep({
   const [pasting, setPasting] = useState(false)
   const [pasteError, setPasteError] = useState("")
   const formRef = useRef<HTMLFormElement>(null)
+  const otpInputRef = useRef<HTMLInputElement>(null)
   const submittedCode = useRef("")
   const shownError = pasteError || error
+  const canConfirmOtp = otp.length > 0
+  const showDevCode = devCode.length > 0 && resendIn > 0
+
+  /** Puts the caret on the last digit after a rejected code. */
+  useEffect(() => {
+    if (pending || !error) {
+      return
+    }
+
+    const input = otpInputRef.current
+    if (!input) {
+      return
+    }
+
+    const end = input.value.length
+    const start = end >= OTP_LENGTH ? end - 1 : end
+    input.focus()
+    input.setSelectionRange(start, end)
+  }, [error, pending])
 
   /** Submits once, when the fifth digit arrives. */
   useEffect(() => {
@@ -399,6 +419,7 @@ export function OtpStep({
             <FormField id="otp" label="کد تأیید" labelHidden error={shownError}>
               <div className="flex flex-wrap items-center justify-center gap-2 text-foreground">
                 <InputOTP
+                  ref={otpInputRef}
                   id="otp"
                   name="otp"
                   maxLength={OTP_LENGTH}
@@ -445,7 +466,7 @@ export function OtpStep({
             </FormField>
           </CardContent>
           <CardFooter className="flex-col items-stretch gap-2">
-            {otp.length > 0 ? (
+            {canConfirmOtp ? (
               <PendingButton
                 pending={pending}
                 lockIn={lockIn}
@@ -457,7 +478,7 @@ export function OtpStep({
             ) : null}
             <Button
               type="button"
-              variant="ghost"
+              variant={resendIn > 0 ? "ghost" : "default"}
               className="h-11 w-full"
               disabled={pending || resendIn > 0}
               onClick={onResend}
@@ -469,7 +490,7 @@ export function OtpStep({
           </CardFooter>
         </form>
       </LoginStepCard>
-      {devCode ? <DevCodeBanner code={devCode} /> : null}
+      {showDevCode ? <DevCodeBanner code={devCode} /> : null}
     </>
   )
 }

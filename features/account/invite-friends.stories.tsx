@@ -19,4 +19,12 @@ export const Ready: Story = {
   args: {
     code: "A2C46",
   },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "فقط لینک دعوت، کپی لینک و اشتراک‌گذاری دیده می‌شود. توضیح کارت می‌گوید لینک را برای دوستان ارسال کنید.",
+      },
+    },
+  },
 }

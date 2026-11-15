@@ -7,7 +7,6 @@ import { ImageCropDialog } from "@/components/organisms/avatar-uploader/image-cr
 import { Button } from "@/components/ui/button"
 import { decodeImageFile } from "@/lib/avatar/decode-image-file"
 import { AVATAR_MIME_TYPE } from "@/lib/avatar/compress-to-target-size"
-import { toPersianDigits } from "@/lib/digits"
 import {
   ImageProcessingError,
   ImageValidationError,
@@ -33,12 +32,6 @@ type AvatarUploaderProps = {
   imageLabel?: string
 }
 
-/** Formats a byte length as a grouped Persian kilobyte label. */
-function formatFileSizeKB(bytes: number) {
-  const kilobytes = Math.max(1, Math.round(bytes / 1024))
-  return `${toPersianDigits(String(kilobytes))} کیلوبایت`
-}
-
 /** Uses a data URL as a background only when it cannot break out of the CSS string. */
 function avatarBackground(value: string) {
   if (!value || /["\\)]/.test(value)) {
@@ -46,21 +39,6 @@ function avatarBackground(value: string) {
   }
 
   return { backgroundImage: `url("${value}")` }
-}
-
-/** Estimates the decoded size of a stored data URL. */
-function bytesFromDataUrl(value: string) {
-  if (!value.startsWith("data:image/")) {
-    return null
-  }
-
-  const base64 = value.split(",")[1]
-  if (!base64) {
-    return null
-  }
-
-  const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0
-  return Math.max(0, Math.floor((base64.length * 3) / 4) - padding)
 }
 
 /** Returns a Persian message for known image errors. */
@@ -94,7 +72,6 @@ export function AvatarUploader({
   const [cropOpen, setCropOpen] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [error, setError] = useState("")
-  const [outputBytes, setOutputBytes] = useState<number | null>(null)
 
   function releasePreview() {
     if (previewUrlRef.current) {
@@ -168,7 +145,6 @@ export function AvatarUploader({
         throw new ImageProcessingError(avatarMessages.outputTooLarge(maxSizeKB))
       }
       onChange(file)
-      setOutputBytes(file.size)
       releasePreview()
     } catch (caught) {
       setError(errorMessage(caught))
@@ -180,7 +156,6 @@ export function AvatarUploader({
   }
 
   const background = avatarBackground(value)
-  const sizeBytes = value ? (outputBytes ?? bytesFromDataUrl(value)) : null
   const locked = disabled || processing || cropOpen
   const uploadLabel = processing
     ? "در حال پردازش"
@@ -189,19 +164,19 @@ export function AvatarUploader({
       : "افزودن تصویر"
 
   return (
-    <div className="flex items-center gap-4" aria-busy={processing}>
+    <div className="flex flex-col items-center gap-4" aria-busy={processing}>
       <div
         role="img"
         aria-label={imageLabel}
-        className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted bg-cover bg-center"
+        className="flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted bg-cover bg-center"
         style={background}
       >
         {background ? null : (
-          <UserIcon className="text-muted-foreground" aria-hidden />
+          <UserIcon className="size-10 text-muted-foreground" aria-hidden />
         )}
       </div>
-      <div className="flex min-w-0 flex-col gap-2">
-        <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col items-center gap-2">
+        <div className="flex flex-wrap justify-center gap-2">
           <input
             ref={inputRef}
             id="avatar"
@@ -235,7 +210,6 @@ export function AvatarUploader({
               disabled={locked}
               onClick={() => {
                 setError("")
-                setOutputBytes(null)
                 onRemove()
               }}
             >
@@ -243,15 +217,10 @@ export function AvatarUploader({
             </Button>
           ) : null}
         </div>
-        {sizeBytes === null ? null : (
-          <p className="text-sm text-muted-foreground" role="status">
-            {formatFileSizeKB(sizeBytes)}
-          </p>
-        )}
         {error ? (
           <p
             id="avatar-error"
-            className="text-sm text-destructive"
+            className="text-center text-sm text-destructive"
             role="alert"
           >
             {error}

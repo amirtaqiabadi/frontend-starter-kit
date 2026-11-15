@@ -35,9 +35,9 @@ import {
 } from "@/features/account/account-store"
 import { InviteFriends } from "@/features/account/invite-friends"
 import { requestSignOut } from "@/features/account/sign-out"
-import { WalletBalanceList } from "@/features/account/wallet-balance-list"
 import { useWalletSession } from "@/features/account/wallet-session"
 import type { Wallet } from "@/features/account/wallet-model"
+import { formatToman } from "@/lib/money"
 import { formatIranMobile } from "@/features/login/phone"
 import { loginPath } from "@/features/login/redirect-path"
 
@@ -103,6 +103,7 @@ function PreviewAccount({
 }
 
 function LiveAccount() {
+  const router = useRouter()
   const session = useWalletSession()
   const account = useSyncExternalStore(
     subscribeAccount,
@@ -110,12 +111,14 @@ function LiveAccount() {
     emptyAccount
   )
 
-  if (session.status === "loading") {
-    return <Skeleton className="h-48" />
-  }
+  useEffect(() => {
+    if (session.status === "signed-out") {
+      router.replace(loginPath("/account"))
+    }
+  }, [router, session.status])
 
-  if (session.status === "signed-out") {
-    return <AccountGuest />
+  if (session.status === "loading" || session.status === "signed-out") {
+    return <Skeleton className="h-48" />
   }
 
   if (session.status === "error") {
@@ -199,9 +202,13 @@ function ProfileForm({
     )
   }
 
+  const savedName = account.name.trim().slice(0, MAX_NAME_LENGTH)
+  const draftName = name.trim().slice(0, MAX_NAME_LENGTH)
+  const dirty = draftName !== savedName || avatarDataUrl !== account.avatarDataUrl
+
   function saveProfile(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (pending) {
+    if (pending || !dirty) {
       return
     }
 
@@ -212,7 +219,7 @@ function ProfileForm({
     try {
       onAccountChange({
         ...account,
-        name: name.trim().slice(0, MAX_NAME_LENGTH),
+        name: draftName,
         avatarDataUrl,
       })
       setNotice("ذخیره شد")
@@ -223,19 +230,11 @@ function ProfileForm({
     }
   }
 
-  const avatarLabel = name.trim() ? `تصویر ${name.trim()}` : "آواتار"
+  const avatarLabel = draftName ? `تصویر ${draftName}` : "آواتار"
   const phone = formatIranMobile(account.phone)
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>مشخصات</CardTitle>
-        {phone ? (
-          <CardDescription>
-            شماره <bdi dir="ltr">{phone}</bdi>
-          </CardDescription>
-        ) : null}
-      </CardHeader>
       <form
         className="flex flex-col gap-(--card-spacing)"
         onSubmit={saveProfile}
@@ -251,22 +250,46 @@ function ProfileForm({
               setNotice("")
             }}
           />
-          <FormField id="name" label="نام" error={error}>
+          <FormField id="phone" label="شماره موبایل">
             <Input
-              id="name"
-              name="name"
-              className={fieldClassName}
-              autoComplete="name"
-              maxLength={MAX_NAME_LENGTH}
-              value={name}
-              aria-invalid={Boolean(error) || undefined}
-              aria-describedby={error ? "name-error" : undefined}
-              onChange={(event) => {
-                setName(event.target.value)
-                setError("")
-                setNotice("")
-              }}
+              id="phone"
+              name="tel"
+              className={`${fieldClassName} text-xl font-bold md:text-xl`}
+              dir="ltr"
+              type="tel"
+              autoComplete="tel"
+              value={phone}
+              disabled
             />
+          </FormField>
+          <FormField id="name" label="نام" error={error}>
+            <div className="flex items-center gap-2">
+              <Input
+                id="name"
+                name="name"
+                className={`${fieldClassName} min-w-0 flex-1`}
+                autoComplete="name"
+                maxLength={MAX_NAME_LENGTH}
+                value={name}
+                aria-invalid={Boolean(error) || undefined}
+                aria-describedby={error ? "name-error" : undefined}
+                onChange={(event) => {
+                  setName(event.target.value)
+                  setError("")
+                  setNotice("")
+                }}
+              />
+              {dirty ? (
+                <Button
+                  type="submit"
+                  className="h-11 shrink-0"
+                  disabled={pending}
+                >
+                  {pending ? <LoaderCircleIcon className="animate-spin" /> : null}
+                  {pending ? "در حال ذخیره" : "ذخیره"}
+                </Button>
+              ) : null}
+            </div>
           </FormField>
           {notice ? (
             <p className="text-sm text-muted-foreground" role="status">
@@ -274,16 +297,6 @@ function ProfileForm({
             </p>
           ) : null}
         </CardContent>
-        <CardFooter>
-          <Button
-            type="submit"
-            className="h-11 w-full sm:w-auto"
-            disabled={pending}
-          >
-            {pending ? <LoaderCircleIcon className="animate-spin" /> : null}
-            {pending ? "در حال ذخیره" : "ذخیره"}
-          </Button>
-        </CardFooter>
       </form>
     </Card>
   )
@@ -297,18 +310,24 @@ function WalletEntry({ wallets }: { wallets: Wallet[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>کیف پول</CardTitle>
-        <CardDescription>
-          شارژ، تاریخچه، بازگشت و استرداد در صفحه کیف پول است.
-        </CardDescription>
+        <div className="flex w-full flex-wrap items-center gap-3">
+          <CardTitle>کیف پول</CardTitle>
+          {wallets.length > 0 ? (
+            <div className="ms-auto flex flex-wrap items-center gap-3">
+              {wallets.map((wallet) => (
+                <span key={wallet.teamId} className="text-sm font-medium">
+                  {formatToman(wallet.availableBalance)}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </CardHeader>
-      <CardContent>
-        {wallets.length === 0 ? (
+      {wallets.length === 0 ? (
+        <CardContent>
           <p className="text-sm text-muted-foreground">هنوز کیف پولی ندارید.</p>
-        ) : (
-          <WalletBalanceList wallets={wallets} />
-        )}
-      </CardContent>
+        </CardContent>
+      ) : null}
       <CardFooter>
         <Button
           nativeButton={false}
@@ -413,7 +432,7 @@ function SignOutButton({ preview = false }: { preview?: boolean }) {
       <Button
         type="button"
         variant="outline"
-        className="h-11 w-full sm:w-auto"
+        className="h-11 w-fit self-start"
         disabled={pending}
         onClick={() => setOpen(true)}
       >
