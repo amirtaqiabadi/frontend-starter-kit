@@ -1,0 +1,15 @@
+node_modules
+.next
+.git
+.env*
+.cursor
+.codex
+.agents
+.idea
+.vscode
+.storybook
+storybook-static
+coverage
+*.log
+*.tsbuildinfo
+.DS_Store
