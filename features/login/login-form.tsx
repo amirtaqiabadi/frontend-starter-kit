@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  useCallback,
   useEffect,
   useState,
   type ChangeEvent,
@@ -31,6 +32,7 @@ import {
   resetPassword as submitResetPassword,
   setPassword as submitSetPassword,
   verifyOtp,
+  type OtpChannel,
   type OtpPurpose,
 } from "@/features/login/login-api"
 import {
@@ -49,6 +51,7 @@ import {
   toAsciiDigits,
 } from "@/features/login/phone"
 import { safeRedirectPath } from "@/features/login/redirect-path"
+import { useSmsOtp } from "@/features/login/use-sms-otp"
 
 export type LoginStep =
   "phone" | "password" | "otp" | "set-password" | "reset-password"
@@ -88,6 +91,16 @@ export function LoginForm({
     initialStep === "reset-password" ? "RESET_PASSWORD" : "LOGIN"
   )
   const [pendingRedirect, setPendingRedirect] = useState(redirectTo)
+  const receiveSmsCode = useCallback((code: string) => {
+    setOtp(code)
+    setError("")
+  }, [])
+  const { start: startSmsOtp, stop: stopSmsOtp } = useSmsOtp(receiveSmsCode)
+
+  useEffect(() => {
+    if (step === "otp") startSmsOtp()
+    else stopSmsOtp()
+  }, [step, startSmsOtp, stopSmsOtp])
 
   useBlockUnload(pending)
   useCountdown(resendIn, setResendIn)
@@ -151,6 +164,7 @@ export function LoginForm({
       return
     }
 
+    stopSmsOtp()
     await runRequest(async () => {
       const storedToken = otpPurpose === "LOGIN" ? readInviteToken() : ""
       const result = await verifyOtp({
@@ -200,14 +214,14 @@ export function LoginForm({
     })
   }
 
-  async function resendCode() {
+  async function resendCode(channel: OtpChannel) {
     const phoneNumber = readPhone()
     if (!phoneNumber || pending || resendIn > 0) {
       return
     }
 
     await runRequest(async () => {
-      await sendOtp(phoneNumber, otpPurpose)
+      await sendOtp(phoneNumber, otpPurpose, channel)
     }, "resend")
   }
 
@@ -238,6 +252,7 @@ export function LoginForm({
       return
     }
 
+    stopSmsOtp()
     setStep("phone")
     setPhone(formatMobileInput(phone))
     setOtp("")
@@ -266,10 +281,22 @@ export function LoginForm({
     })
   }
 
-  async function sendOtp(phoneNumber: string, purpose: OtpPurpose) {
-    const requested = await requestOtp(phoneNumber)
-    setOtpPurpose(purpose)
+  async function sendOtp(
+    phoneNumber: string,
+    purpose: OtpPurpose,
+    channel: OtpChannel = "sms"
+  ) {
+    stopSmsOtp()
     setOtp("")
+    if (channel === "sms") startSmsOtp()
+    let requested
+    try {
+      requested = await requestOtp(phoneNumber, channel)
+    } catch (reason) {
+      stopSmsOtp()
+      throw reason
+    }
+    setOtpPurpose(purpose)
     setPassword("")
     setDevCode(requested.devCode)
     setResendIn(requested.cooldownSeconds)

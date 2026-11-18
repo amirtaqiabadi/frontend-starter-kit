@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 
 import { OtpStep } from "@/features/login/login-steps"
+import type { OtpChannel } from "@/features/login/login-api"
 
 function renderOtp({
   error = "",
@@ -10,6 +11,7 @@ function renderOtp({
   otp = "12345",
   resendIn = 0,
   devCode = "",
+  onResend = vi.fn(),
   onSubmit = (event: FormEvent<HTMLFormElement>) => event.preventDefault(),
 }: {
   error?: string
@@ -17,6 +19,7 @@ function renderOtp({
   otp?: string
   resendIn?: number
   devCode?: string
+  onResend?: (channel: OtpChannel) => void
   onSubmit?: (event: FormEvent<HTMLFormElement>) => void
 } = {}) {
   return render(
@@ -30,7 +33,7 @@ function renderOtp({
       devCode={devCode}
       onOtpChange={vi.fn()}
       onSubmit={onSubmit}
-      onResend={vi.fn()}
+      onResend={onResend}
     />
   )
 }
@@ -45,6 +48,16 @@ function otpInput() {
 }
 
 describe("OtpStep", () => {
+  it("exposes one native input for the iOS code suggestion", () => {
+    const { container } = renderOtp({ otp: "" })
+
+    expect(
+      container.querySelectorAll('input[autocomplete="one-time-code"]')
+    ).toHaveLength(1)
+    expect(otpInput().inputMode).toBe("numeric")
+    expect(otpInput().maxLength).toBe(5)
+  })
+
   it("selects the last digit after a rejected code", () => {
     const view = renderOtp({ pending: true })
     const input = otpInput()
@@ -114,11 +127,18 @@ describe("OtpStep", () => {
     )
   })
 
-  it("makes resend the primary action after the timer ends", () => {
+  it("shows SMS and voice actions only after the timer ends", () => {
     const view = renderOtp({ otp: "", resendIn: 110 })
     const waiting = screen.getByRole("button", { name: /ارسال دوباره/ })
 
     expect(waiting.className).not.toContain("bg-primary")
+    expect(waiting).toHaveProperty("disabled", true)
+    expect(
+      screen.queryByRole("button", { name: "ارسال کد با پیامک" })
+    ).toBeNull()
+    expect(
+      screen.queryByRole("button", { name: "ارسال کد با تماس" })
+    ).toBeNull()
 
     view.rerender(
       <OtpStep
@@ -136,8 +156,30 @@ describe("OtpStep", () => {
     )
 
     expect(
-      screen.getByRole("button", { name: "ارسال دوباره" }).className
+      screen.getByRole("button", { name: "ارسال کد با پیامک" }).className
     ).toContain("bg-primary")
+    expect(
+      screen.getByRole("button", { name: "ارسال کد با تماس" }).className
+    ).toContain("bg-secondary")
+  })
+
+  it("requests the channel selected by the user", () => {
+    const onResend = vi.fn()
+    renderOtp({ otp: "", onResend })
+    fireEvent.click(screen.getByRole("button", { name: "ارسال کد با پیامک" }))
+    fireEvent.click(screen.getByRole("button", { name: "ارسال کد با تماس" }))
+    expect(onResend.mock.calls).toEqual([["sms"], ["voice"]])
+  })
+
+  it("disables both channels while a request is pending", () => {
+    const onResend = vi.fn()
+    renderOtp({ otp: "", pending: true, onResend })
+    for (const name of ["ارسال کد با پیامک", "ارسال کد با تماس"]) {
+      const button = screen.getByRole("button", { name })
+      expect(button).toHaveProperty("disabled", true)
+      fireEvent.click(button)
+    }
+    expect(onResend).not.toHaveBeenCalled()
   })
 
   it("hides the development code after the resend timer ends", () => {
