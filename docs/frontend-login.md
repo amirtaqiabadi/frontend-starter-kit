@@ -72,6 +72,33 @@ On `password/login` and `otp/verify`, a bad phone is `400 INVALID_BODY` (same co
 
 Exactly 5 digits. Persian and Arabic digits are accepted. The user has **3** attempts per code (default). Each mismatch returns `attemptsRemaining`. After the last failure the code is burned.
 
+The OTP input uses one native input behind the five visual slots and
+`autocomplete="one-time-code"` for iOS/Safari keyboard suggestions. On supported
+Android browsers, WebOTP starts listening **before** `otp/request` sends the SMS.
+After browser consent, the code fills the controlled input and the existing
+five-digit auto-submit runs. Dismissal or lack of support leaves manual entry
+and paste available. Listening stops on submit, resend, phone edit, unmount,
+send failure, or after 180 seconds.
+
+The SMS provider must send this format (replace both sample codes):
+
+```text
+استارتر کیت
+code: 72132
+@starter-kit.ir #72132
+```
+
+The last line must use the **page hostname**, not the API hostname, with a single
+ASCII space before `#`. `satrter-kit.ir` is a typo and will not match
+`starter-kit.ir`. Do not include a scheme, path, or port. Production needs HTTPS.
+`code:` alone does not enable WebOTP. SMS delivery/template configuration lives
+in the backend/provider, outside this frontend repository.
+
+Device verification: on HTTPS `starter-kit.ir`, request a fresh SMS in Safari on
+iPhone and tap the keyboard code suggestion; repeat in Chrome on Android and
+accept the browser prompt. Check resend, manual entry, and dismissing the prompt.
+Desktop mocks cannot verify real SMS delivery or the OS keyboard suggestion.
+
 ### Password
 
 8 to 128 characters. No other complexity rules. These values are rejected as too common (`400 COMMON_PASSWORD`), case-insensitive:
@@ -129,8 +156,14 @@ Five failures for one phone inside 15 minutes return `429 LOCKED`. Twenty login 
 `POST /api/v1/auth/otp/request`
 
 ```json
-{ "phoneNumber": "09123456789" }
+{ "phoneNumber": "09123456789", "channel": "sms" }
 ```
+
+Use `"channel": "voice"` for a phone call reading the code aloud. The initial
+request uses `sms`. After the resend timer ends, the UI offers a primary SMS
+button and a secondary voice-call button. Both share the server cooldown and
+are disabled while a request is pending. WebOTP listens only for SMS requests;
+voice codes are entered manually.
 
 `200`
 

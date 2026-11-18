@@ -31,6 +31,7 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp"
 import { toPersianDigits } from "@/lib/digits"
+import type { OtpChannel } from "@/features/login/login-api"
 import {
   formatIranMobile,
   MOBILE_INPUT_MAX,
@@ -302,7 +303,7 @@ type OtpStepProps = {
   devCode: string
   onOtpChange: (value: string) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
-  onResend: () => void
+  onResend: (channel: OtpChannel) => void
 }
 
 const OTP_PASTE_INVALID = "کد معتبری برای چسباندن پیدا نشد."
@@ -476,17 +477,37 @@ export function OtpStep({
                 در حال بررسی
               </PendingButton>
             ) : null}
-            <Button
-              type="button"
-              variant={resendIn > 0 ? "ghost" : "default"}
-              className="h-11 w-full"
-              disabled={pending || resendIn > 0}
-              onClick={onResend}
-            >
-              {resendIn > 0
-                ? `ارسال دوباره تا ${toPersianDigits(String(resendIn))} ثانیه`
-                : "ارسال دوباره"}
-            </Button>
+            {resendIn > 0 ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-11 w-full"
+                disabled
+              >
+                ارسال دوباره تا {toPersianDigits(String(resendIn))} ثانیه
+              </Button>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant="default"
+                  className="h-11 w-full"
+                  disabled={pending}
+                  onClick={() => onResend("sms")}
+                >
+                  ارسال کد با پیامک
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-11 w-full"
+                  disabled={pending}
+                  onClick={() => onResend("voice")}
+                >
+                  ارسال کد با تماس
+                </Button>
+              </>
+            )}
           </CardFooter>
         </form>
       </LoginStepCard>

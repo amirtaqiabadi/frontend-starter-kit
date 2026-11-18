@@ -45,6 +45,27 @@ describe("identifyAccount", () => {
 })
 
 describe("requestOtp", () => {
+  it.each([undefined, "sms", "voice"] as const)(
+    "sends the requested channel (%s), defaulting to SMS",
+    async (channel) => {
+      const fetchMock = vi.fn(async () =>
+        jsonResponse(200, { cooldownSeconds: 120 })
+      )
+      vi.stubGlobal("fetch", fetchMock)
+      await requestOtp("09123456789", channel)
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/v1/auth/otp/request",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            phoneNumber: "09123456789",
+            channel: channel ?? "sms",
+          }),
+        })
+      )
+    }
+  )
+
   it("keeps cooldown and a 5-digit dev code", async () => {
     vi.stubGlobal(
       "fetch",

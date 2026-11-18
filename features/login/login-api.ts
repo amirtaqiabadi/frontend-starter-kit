@@ -5,6 +5,7 @@ import { safeRedirectPath } from "@/features/login/redirect-path"
 
 export type NextAuthStep = "PASSWORD" | "OTP"
 export type OtpPurpose = "LOGIN" | "RESET_PASSWORD"
+export type OtpChannel = "sms" | "voice"
 
 export type LoginApiErrorInit = {
   code: string
@@ -88,9 +89,15 @@ export async function loginWithPassword(input: {
   return { redirectTo: readRedirectTo(data) }
 }
 
-/** Asks the SMS provider for a 5-digit login or reset code. */
-export async function requestOtp(phoneNumber: string) {
-  const data = await authPost(apiPath("/auth/otp/request"), { phoneNumber })
+/** Requests a 5-digit login or reset code via SMS or voice call. */
+export async function requestOtp(
+  phoneNumber: string,
+  channel: OtpChannel = "sms"
+) {
+  const data = await authPost(apiPath("/auth/otp/request"), {
+    phoneNumber,
+    channel,
+  })
   const cooldown = readNumber(data, "cooldownSeconds")
   const devCode = readString(data, "devCode")
 
