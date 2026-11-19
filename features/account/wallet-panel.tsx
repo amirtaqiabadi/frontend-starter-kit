@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { LoaderCircleIcon } from "lucide-react"
 
 import { FormField } from "@/components/molecules/form-field"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -38,6 +39,7 @@ import {
 } from "@/lib/money"
 import { CardNumberField } from "@/features/account/card-number-field"
 import { cardDigits, CARD_LENGTH } from "@/features/account/card"
+import { bankLogoSrc, resolveBankByCard } from "@/features/account/iran-bank"
 import { TransactionAmount } from "@/features/account/transaction-amount"
 import {
   initiatePayment,
@@ -50,12 +52,10 @@ import {
   WalletApiError,
 } from "@/features/account/wallet-api"
 import {
-  canRequestRefund,
   CHARGE_DESCRIPTION,
   isWalletOwner,
   MIN_CHARGE_RIAL,
   MAX_CHARGE_TOMAN,
-  refundForTransaction,
   refundStatusLabel,
   transactionLabel,
   walletDisplayName,
@@ -94,8 +94,14 @@ export function WalletPanel({
   const [fetchedTeamId, setFetchedTeamId] = useState(() =>
     preview ? (initialWallets[0]?.teamId ?? 0) : 0
   )
+  const [page, setPage] = useState(1)
+  const [hasNextPage, setHasNextPage] = useState(false)
+  const [detailsFailed, setDetailsFailed] = useState(false)
   const [detailsNonce, setDetailsNonce] = useState(0)
   const [chargeOpen, setChargeOpen] = useState(false)
+  const [withdrawOpen, setWithdrawOpen] = useState(false)
+  const [withdrawAmount, setWithdrawAmount] = useState("")
+  const [withdrawError, setWithdrawError] = useState("")
   const [chargeAmount, setChargeAmount] = useState("")
   const [cardNumber, setCardNumber] = useState("")
   const [chargeError, setChargeError] = useState("")
@@ -104,9 +110,6 @@ export function WalletPanel({
   const [notice, setNotice] = useState("")
   const [pending, setPending] = useState<PendingAction>("")
   const [lockIn, setLockIn] = useState(0)
-  const [refundTarget, setRefundTarget] = useState<LedgerTransaction | null>(
-    null
-  )
   const walletLock = useRef(false)
   const allowUnload = useRef(false)
   useBlockUnload(pending !== "", allowUnload)
@@ -137,12 +140,14 @@ export function WalletPanel({
     const teamId = selectedTeamId
     let cancelled = false
 
-    Promise.all([listTransactions(teamId), listRefunds(teamId)])
+    Promise.all([listTransactions(teamId, page), listRefunds(teamId)])
       .then(([nextTransactions, nextRefunds]) => {
         if (cancelled) {
           return
         }
-        setTransactions(nextTransactions)
+        setTransactions(nextTransactions.transactions)
+        setHasNextPage(nextTransactions.hasNextPage)
+        setDetailsFailed(false)
         setRefunds(nextRefunds)
         setFetchedTeamId(teamId)
         setActionError(null)
@@ -156,13 +161,14 @@ export function WalletPanel({
           return
         }
         setFetchedTeamId(teamId)
+        setDetailsFailed(true)
         setActionError(toWalletError(reason))
       })
 
     return () => {
       cancelled = true
     }
-  }, [preview, canManage, selectedTeamId, detailsNonce, router])
+  }, [preview, canManage, selectedTeamId, detailsNonce, page, router])
 
   async function runAction(action: PendingAction, work: () => Promise<void>) {
     if (pending || walletLock.current) {
@@ -204,6 +210,7 @@ export function WalletPanel({
       nextTeamId && nextWallets.some((wallet) => wallet.teamId === nextTeamId)
         ? nextTeamId
         : nextWallets[0]?.teamId
+    setPage(1)
     setSelectedTeamId(kept ?? 0)
     setDetailsNonce((value) => value + 1)
   }
@@ -248,28 +255,33 @@ export function WalletPanel({
 
   function submitRefund(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!refundTarget) {
+    if (!selected || !isWalletOwner(selected)) return
+    const amount = tomanInputToRial(withdrawAmount)
+    if (!Number.isSafeInteger(amount) || amount <= 0) {
+      setWithdrawError("مبلغ برداشت را وارد کنید.")
       return
     }
-    if (cardDigits(cardNumber).length !== CARD_LENGTH) {
+    if (amount > selected.availableBalance) {
+      setWithdrawError("مبلغ بیشتر از موجودی قابل برداشت است.")
+      return
+    }
+    const digits = cardDigits(cardNumber)
+    if (digits.length !== CARD_LENGTH) {
       setCardError("شماره کارت را ۱۶ رقم وارد کنید.")
       return
     }
-
-    const transaction = refundTarget
+    const teamId = selected.teamId
     void runAction("refund", async () => {
       if (preview) {
-        applyPreviewRefund(transaction, cardNumber)
+        applyPreviewRefund(teamId, amount, digits)
       } else {
-        await requestRefund({
-          transactionId: transaction.id,
-          cardNumber,
-        })
-        await refresh()
+        await requestRefund({ teamId, amount, cardNumber: digits })
       }
       setCardNumber("")
-      setRefundTarget(null)
-      setNotice("درخواست استرداد ثبت شد. موجودی الان تغییر نمی‌کند.")
+      setWithdrawAmount("")
+      setWithdrawOpen(false)
+      setNotice("درخواست برداشت ثبت شد و مبلغ از موجودی کسر شد.")
+      if (!preview) await refresh(teamId)
     })
   }
 
@@ -296,14 +308,34 @@ export function WalletPanel({
     ])
   }
 
-  function applyPreviewRefund(transaction: LedgerTransaction, pan: string) {
-    const digits = cardDigits(pan)
+  function applyPreviewRefund(teamId: number, amount: number, digits: string) {
+    const transactionId = nextId(transactions.map((row) => row.id))
+    const balance = Math.max(0, (selected?.availableBalance ?? 0) - amount)
+    setWallets((current) =>
+      current.map((wallet) =>
+        wallet.teamId === teamId
+          ? { ...wallet, availableBalance: balance }
+          : wallet
+      )
+    )
+    setTransactions((current) => [
+      {
+        id: transactionId,
+        type: "Refund",
+        amount: -amount,
+        availableBalanceAfter: balance,
+        restrictedBalanceAfter: selected?.restrictedBalance ?? 0,
+        gatewayAttemptId: null,
+        createdAt: new Date().toISOString(),
+      },
+      ...current,
+    ])
     setRefunds((current) => [
       {
         id: nextId(current.map((row) => row.id)),
-        teamId: selectedTeamId,
-        transactionId: transaction.id,
-        amount: Math.abs(transaction.amount),
+        teamId,
+        transactionId,
+        amount,
         status: "pending",
         cardNumber: `${digits.slice(0, 6)}******${digits.slice(-4)}`,
         createdAt: new Date().toISOString(),
@@ -313,61 +345,83 @@ export function WalletPanel({
   }
 
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-6">
-        {wallets.length > 1 ? (
-          <FormField id="wallet" label="کیف پول">
-            <Select
-              value={selected ? String(selected.teamId) : null}
-              onValueChange={(value) => {
-                if (value) {
-                  setSelectedTeamId(Number(value))
-                  setFetchedTeamId(0)
-                  setTransactions([])
-                  setRefunds([])
-                  setNotice("")
-                  setActionError(null)
-                }
-              }}
-              items={walletItems}
-            >
-              <SelectTrigger id="wallet" className="h-11 w-full">
-                <SelectValue placeholder="کیف پول را انتخاب کنید" />
-              </SelectTrigger>
-              <SelectContent>
-                {wallets.map((wallet) => (
-                  <SelectItem key={wallet.teamId} value={String(wallet.teamId)}>
-                    {walletDisplayName(wallet.displayName)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FormField>
-        ) : null}
+    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2 lg:grid-rows-[auto_1fr]">
+      <Card className="lg:col-start-1 lg:row-start-1">
+        <CardContent className="flex flex-col gap-6">
+          <div className="flex flex-col gap-2">
+            <h1 className="text-base font-medium">موجودی کیف پول</h1>
+          </div>
+          {wallets.length > 1 ? (
+            <FormField id="wallet" label="کیف پول">
+              <Select
+                value={selected ? String(selected.teamId) : null}
+                onValueChange={(value) => {
+                  if (value) {
+                    setPage(1)
+                    setHasNextPage(false)
+                    setDetailsFailed(false)
+                    setSelectedTeamId(Number(value))
+                    setFetchedTeamId(0)
+                    setTransactions([])
+                    setRefunds([])
+                    setNotice("")
+                    setActionError(null)
+                  }
+                }}
+                items={walletItems}
+              >
+                <SelectTrigger id="wallet" className="h-11 w-full">
+                  <SelectValue placeholder="کیف پول را انتخاب کنید" />
+                </SelectTrigger>
+                <SelectContent>
+                  {wallets.map((wallet) => (
+                    <SelectItem
+                      key={wallet.teamId}
+                      value={String(wallet.teamId)}
+                    >
+                      {walletDisplayName(wallet.displayName)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
+          ) : null}
 
-        {selected ? (
-          <div className="flex flex-col gap-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm text-muted-foreground">موجودی</p>
+          {selected ? (
+            <div className="flex flex-col gap-1">
               {selected.role !== "owner" ? (
-                <Badge variant="outline">
-                  {walletRoleLabel(selected.role)}
-                </Badge>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">
+                    {walletRoleLabel(selected.role)}
+                  </Badge>
+                </div>
+              ) : null}
+              <p className="text-2xl font-medium">
+                {formatToman(selected.availableBalance)}
+              </p>
+              {selected.restrictedBalance > 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  موجودی محدود: {formatToman(selected.restrictedBalance)}
+                </p>
               ) : null}
             </div>
-            <p className="text-2xl font-medium">
-              {formatToman(selected.availableBalance)}
-            </p>
-            {selected.restrictedBalance > 0 ? (
-              <p className="text-sm text-muted-foreground">
-                موجودی محدود: {formatToman(selected.restrictedBalance)}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
+          ) : null}
 
+          {!canCharge ? (
+            <p className="text-sm text-muted-foreground">
+              فقط مالک می‌تواند شارژ، تاریخچه یا استرداد را ببیند.
+            </p>
+          ) : null}
+
+          {actionError ? <ErrorNote error={actionError} /> : null}
+          {notice ? (
+            <p className="text-sm text-muted-foreground" role="status">
+              {notice}
+            </p>
+          ) : null}
+        </CardContent>
         {canCharge ? (
-          <div className="flex flex-col gap-4 sm:flex-row">
+          <CardFooter className="gap-4">
             <Dialog
               open={chargeOpen}
               onOpenChange={(open) => {
@@ -380,7 +434,7 @@ export function WalletPanel({
               <DialogTrigger
                 render={
                   <Button
-                    className="h-11 w-full sm:w-auto"
+                    className="h-11 min-w-0 flex-1"
                     disabled={pending !== "" || lockIn > 0}
                   />
                 }
@@ -421,50 +475,102 @@ export function WalletPanel({
                 </form>
               </DialogContent>
             </Dialog>
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            فقط مالک می‌تواند شارژ، تاریخچه یا استرداد را ببیند.
-          </p>
-        )}
-
-        {actionError ? <ErrorNote error={actionError} /> : null}
-        {notice ? (
-          <p className="text-sm text-muted-foreground" role="status">
-            {notice}
-          </p>
+            {selected && selected.availableBalance > 0 ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 min-w-0 flex-1"
+                disabled={pending !== "" || lockIn > 0}
+                onClick={() => {
+                  setActionError(null)
+                  setWithdrawOpen(true)
+                }}
+              >
+                برداشت وجه
+              </Button>
+            ) : null}
+          </CardFooter>
         ) : null}
+      </Card>
 
-        {canManage ? (
-          <HistorySection
-            detailsLoading={detailsLoading}
-            pending={pending !== ""}
-            transactions={transactions}
-            refunds={refunds}
-            onRefund={setRefundTarget}
-          />
-        ) : null}
-      </CardContent>
+      {canManage ? (
+        <HistorySection
+          pagination={
+            detailsFailed ? (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setFetchedTeamId(0)
+                  setDetailsNonce((value) => value + 1)
+                }}
+              >
+                تلاش دوباره
+              </Button>
+            ) : page > 1 || hasNextPage ? (
+              <nav
+                aria-label="صفحه‌بندی تراکنش‌ها"
+                className="flex items-center justify-between gap-2"
+              >
+                <Button
+                  variant="outline"
+                  disabled={detailsLoading || page === 1}
+                  onClick={() => {
+                    setFetchedTeamId(0)
+                    setPage(page - 1)
+                  }}
+                >
+                  صفحه قبل
+                </Button>
+                <span>صفحه {toPersianDigits(String(page))}</span>
+                <Button
+                  variant="outline"
+                  disabled={detailsLoading || !hasNextPage}
+                  onClick={() => {
+                    setFetchedTeamId(0)
+                    setPage(page + 1)
+                  }}
+                >
+                  صفحه بعد
+                </Button>
+              </nav>
+            ) : null
+          }
+          detailsLoading={detailsLoading}
+          transactions={transactions}
+          refunds={refunds}
+        />
+      ) : null}
 
       <Dialog
-        open={Boolean(refundTarget)}
+        open={withdrawOpen}
         onOpenChange={(open) => {
+          if (pending === "refund") return
+          setWithdrawOpen(open)
           if (!open) {
-            setRefundTarget(null)
             setCardError("")
+            setWithdrawError("")
           }
         }}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>استرداد به کارت</DialogTitle>
+            <DialogTitle>برداشت وجه</DialogTitle>
             <DialogDescription>
-              استرداد کامل این تراکنش به مبلغ{" "}
-              {refundTarget ? formatToman(refundTarget.amount) : ""}. شماره کارت
-              مقصد را وارد کنید. موجودی الان کم نمی‌شود.
+              مبلغ درخواست نهایتا تا ۷۲ ساعت واریز خواهد شد.
             </DialogDescription>
           </DialogHeader>
           <form className="flex flex-col gap-4" onSubmit={submitRefund}>
+            <TomanField
+              id="withdraw-amount"
+              label="مبلغ"
+              value={withdrawAmount}
+              error={withdrawError}
+              maxToman={999_999_999_999}
+              onChange={(value) => {
+                setWithdrawAmount(value)
+                setWithdrawError("")
+              }}
+            />
             <CardNumberField
               value={cardNumber}
               error={cardError}
@@ -473,11 +579,16 @@ export function WalletPanel({
                 setCardError("")
               }}
             />
+            {actionError ? <ErrorNote error={actionError} /> : null}
             <DialogFooter>
               <Button
                 type="submit"
                 className="h-11 w-full"
-                disabled={pending !== ""}
+                disabled={
+                  pending !== "" ||
+                  tomanInputToRial(withdrawAmount) <= 0 ||
+                  cardDigits(cardNumber).length !== CARD_LENGTH
+                }
               >
                 {pending === "refund" ? (
                   <LoaderCircleIcon className="animate-spin" />
@@ -488,84 +599,76 @@ export function WalletPanel({
           </form>
         </DialogContent>
       </Dialog>
-    </Card>
+    </div>
   )
 }
 
 function HistorySection({
+  pagination,
   detailsLoading,
-  pending,
   transactions,
   refunds,
-  onRefund,
 }: {
+  pagination: React.ReactNode
   detailsLoading: boolean
-  pending: boolean
   transactions: LedgerTransaction[]
   refunds: CardRefund[]
-  onRefund: (transaction: LedgerTransaction) => void
 }) {
   return (
     <>
-      {detailsLoading || transactions.length > 0 ? (
-        <section className="flex flex-col gap-2">
-          <h2 className="text-base font-medium">تراکنش‌ها</h2>
-          {detailsLoading ? (
-            <Skeleton className="h-24" />
-          ) : (
-            <ul className="flex flex-col">
-              {transactions.map((transaction) => (
-                <TransactionRow
-                  key={transaction.id}
-                  transaction={transaction}
-                  transactions={transactions}
-                  refunds={refunds}
-                  pending={pending}
-                  onRefund={onRefund}
-                />
-              ))}
-            </ul>
-          )}
+      {
+        <section className="flex min-w-0 flex-col gap-2 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+          <Card>
+            <CardContent className="flex flex-col gap-2">
+              <h2 className="text-base font-medium">تراکنش‌ها</h2>
+              {detailsLoading ? (
+                <Skeleton className="h-24" />
+              ) : transactions.length ? (
+                <ul className="flex flex-col">
+                  {transactions.map((transaction) => (
+                    <TransactionRow
+                      key={transaction.id}
+                      transaction={transaction}
+                    />
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  تراکنشی در این صفحه وجود ندارد.
+                </p>
+              )}
+              {pagination}
+            </CardContent>
+          </Card>
         </section>
-      ) : null}
-      {detailsLoading || refunds.length > 0 ? (
-        <section className="flex flex-col gap-2">
-          <h2 className="text-base font-medium">درخواست‌های استرداد</h2>
-          {detailsLoading ? (
-            <Skeleton className="h-16" />
-          ) : (
-            <ul className="flex flex-col">
-              {refunds.map((refund) => (
-                <RefundRow key={refund.id} refund={refund} />
-              ))}
-            </ul>
-          )}
+      }
+      {
+        <section className="flex min-w-0 flex-col gap-2 lg:col-start-1 lg:row-start-2">
+          <Card>
+            <CardContent className="flex flex-col gap-2">
+              <h2 className="text-base font-medium">درخواست‌های برداشت وجه</h2>
+              {detailsLoading ? (
+                <Skeleton className="h-16" />
+              ) : refunds.length ? (
+                <ul className="flex flex-col">
+                  {refunds.map((refund) => (
+                    <RefundRow key={refund.id} refund={refund} />
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  هنوز درخواست برداشت وجهی ثبت نشده است.
+                </p>
+              )}
+            </CardContent>
+          </Card>
         </section>
-      ) : null}
+      }
     </>
   )
 }
 
-function TransactionRow({
-  transaction,
-  transactions,
-  refunds,
-  pending,
-  onRefund,
-}: {
-  transaction: LedgerTransaction
-  transactions: LedgerTransaction[]
-  refunds: CardRefund[]
-  pending: boolean
-  onRefund: (transaction: LedgerTransaction) => void
-}) {
-  const showRefund = canRequestRefund({
-    transaction,
-    transactions,
-    refunds,
-  })
-  const refund = refundForTransaction(transaction.id, refunds)
-
+function TransactionRow({ transaction }: { transaction: LedgerTransaction }) {
   return (
     <li className="flex flex-col gap-2 border-b py-3 last:border-b-0">
       <div className="flex items-center justify-between gap-3">
@@ -582,37 +685,45 @@ function TransactionRow({
         </div>
         <TransactionAmount amountRial={transaction.amount} />
       </div>
-      {showRefund || refund ? (
-        <div className="flex flex-wrap items-center gap-2">
-          {showRefund ? (
-            <Button
-              variant="outline"
-              className="h-11"
-              disabled={pending}
-              onClick={() => onRefund(transaction)}
-            >
-              استرداد به کارت
-            </Button>
-          ) : null}
-          {refund ? (
-            <p className="text-xs text-muted-foreground">
-              استرداد: {refundStatusLabel(refund.status)}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
     </li>
   )
 }
 
 function RefundRow({ refund }: { refund: CardRefund }) {
+  const masked = refund.cardNumber.includes("*")
+  const bank = resolveBankByCard(
+    masked ? refund.cardNumber.slice(0, 6) : refund.cardNumber
+  )
   return (
     <li className="flex items-center justify-between gap-3 border-b py-3 last:border-b-0">
       <div className="flex min-w-0 flex-col gap-1">
-        <Badge variant="outline">{refundStatusLabel(refund.status)}</Badge>
-        <p className="font-mono text-xs text-muted-foreground" dir="ltr">
-          {refund.cardNumber}
-        </p>
+        <span className="text-sm">{formatToman(refund.amount)}</span>
+        <Badge
+          variant="outline"
+          className={
+            refund.status === "pending"
+              ? "border-amber-500/40 bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-300"
+              : undefined
+          }
+        >
+          {refundStatusLabel(refund.status)}
+        </Badge>
+      </div>
+      <div className="flex min-w-0 flex-col items-end gap-1">
+        <div className="flex items-center gap-2" dir="ltr">
+          {bank ? (
+            <Image
+              src={bankLogoSrc(bank.logoFile)}
+              alt={bank.nameFa}
+              width={24}
+              height={24}
+              className="size-6 object-contain"
+            />
+          ) : null}
+          <span className="font-mono text-xs text-muted-foreground">
+            {refund.cardNumber}
+          </span>
+        </div>
         <time
           dateTime={refund.createdAt}
           className="text-xs text-muted-foreground"
@@ -620,7 +731,6 @@ function RefundRow({ refund }: { refund: CardRefund }) {
           {formatTehranDateTime(refund.createdAt)}
         </time>
       </div>
-      <span className="shrink-0 text-sm">{formatToman(refund.amount)}</span>
     </li>
   )
 }

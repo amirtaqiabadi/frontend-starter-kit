@@ -5,6 +5,7 @@ import {
   initiatePayment,
   listWallets,
   recoverPayment,
+  requestRefund,
   WalletApiError,
 } from "@/features/account/wallet-api"
 
@@ -117,6 +118,43 @@ describe("createWallet", () => {
     expect(retried.headers).toMatchObject({
       "x-csrf-token": "fresh",
     })
+  })
+})
+
+describe("requestRefund", () => {
+  it("posts the wallet, rial amount, and destination card with the session and CSRF token", async () => {
+    document.cookie = "csrf-token=example"
+    const refund = {
+      id: 3,
+      teamId: 4,
+      transactionId: 91,
+      amount: 50000,
+      status: "pending",
+      cardNumber: "502229******5995",
+      createdAt: "2026-11-07T12:10:00.000Z",
+    }
+    const fetchMock = vi.fn(async () => jsonResponse(201, refund))
+    vi.stubGlobal("fetch", fetchMock)
+    await expect(
+      requestRefund({
+        teamId: 4,
+        amount: 50000,
+        cardNumber: "5022291234565995",
+      })
+    ).resolves.toEqual(refund)
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/payment/refunds",
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
+        headers: expect.objectContaining({ "x-csrf-token": "example" }),
+        body: JSON.stringify({
+          teamId: 4,
+          amount: 50000,
+          cardNumber: "5022291234565995",
+        }),
+      })
+    )
   })
 })
 

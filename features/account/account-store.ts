@@ -26,7 +26,7 @@ function parseAccount(raw: string | null) {
 
   try {
     const parsed = JSON.parse(raw) as Partial<AccountProfile>
-    if (!parsed || typeof parsed.phone !== "string" || !parsed.phone) {
+    if (!parsed || typeof parsed.phone !== "string") {
       return null
     }
 

@@ -17,7 +17,6 @@ import { ArrowLeftIcon, HomeIcon } from "lucide-react"
 import { DirectionalIcon } from "@/components/atoms/directional-icon"
 import { Button, buttonVariants } from "@/components/ui/button"
 
-import { signInAccount } from "@/features/account/account-store"
 import {
   clearInviteToken,
   readInviteToken,
@@ -382,10 +381,6 @@ export function LoginForm({
   }
 
   function finishLogin(path: string) {
-    const phoneNumber = normalizeIranMobile(phone)
-    if (phoneNumber) {
-      signInAccount(phoneNumber)
-    }
     router.push(safeRedirectPath(path))
   }
 

@@ -19,14 +19,18 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{
     next?: string | string[]
+    inviteby?: string | string[]
     token?: string | string[]
   }>
 }) {
-  const { next, token } = await searchParams
+  const { next, inviteby, token } = await searchParams
 
   return (
     <main className="mx-auto flex min-h-svh w-full max-w-md flex-col justify-center px-4 py-8">
-      <LoginForm next={firstQuery(next)} inviteToken={firstQuery(token)} />
+      <LoginForm
+        next={firstQuery(next)}
+        inviteToken={firstQuery(inviteby) ?? firstQuery(token)}
+      />
     </main>
   )
 }

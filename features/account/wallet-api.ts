@@ -117,17 +117,26 @@ export async function initiatePayment(input: {
 }
 
 /** Newest-first ledger for an owned wallet. */
-export async function listTransactions(teamId: number) {
-  const data = await walletGet(apiPath(`/wallets/${teamId}/transactions`))
-  const transactions = asRecord(data)?.transactions
-  if (!Array.isArray(transactions)) {
-    return []
+export async function listTransactions(teamId: number, page = 1) {
+  const data = asRecord(
+    await walletGet(
+      apiPath(`/wallets/${teamId}/transactions?page=${page}&limit=20`)
+    )
+  )
+  const pagination = asRecord(data?.pagination)
+  if (
+    !Array.isArray(data?.transactions) ||
+    pagination?.page !== page ||
+    typeof pagination.hasNextPage !== "boolean"
+  ) {
+    throw unknownError(200)
   }
 
-  return transactions.flatMap((row) => {
+  const transactions = data.transactions.flatMap((row) => {
     const transaction = parseTransaction(row)
     return transaction ? [transaction] : []
   })
+  return { transactions, hasNextPage: pagination.hasNextPage }
 }
 
 /** Asks the gateway to reverse a successful top-up. */
@@ -135,13 +144,15 @@ export async function reversePayment(attemptId: number) {
   await walletPost(apiPath("/payment/reverse"), { attemptId })
 }
 
-/** Stores a manual card payout request. Does not change the balance. */
+/** Requests a manual card payout and deducts the amount from the wallet. */
 export async function requestRefund(input: {
-  transactionId: number
+  teamId: number
+  amount: number
   cardNumber: string
 }) {
   const data = await walletPost(apiPath("/payment/refunds"), {
-    transactionId: input.transactionId,
+    teamId: input.teamId,
+    amount: input.amount,
     cardNumber: input.cardNumber,
   })
   const refund = parseRefund(data)
