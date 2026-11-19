@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   formatLoginError,
   identifyAccount,
+  loginWithPassword,
   LoginApiError,
   requestOtp,
   fetchAuthToken,
@@ -98,6 +99,26 @@ describe("requestOtp", () => {
 })
 
 describe("verifyOtp", () => {
+  it("reads profile fields from both successful login responses", async () => {
+    const user = {
+      name: "علی رضایی",
+      phoneNumber: "09123456789",
+      avatarUrl: null,
+      hasPassword: true,
+      token: "AC234",
+      walletIds: [4, 7],
+    }
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(200, { ...user, redirectTo: "/" }))
+    )
+    await expect(
+      loginWithPassword({ phoneNumber: user.phoneNumber, password: "password" })
+    ).resolves.toMatchObject({ user })
+    await expect(
+      verifyOtp({ phoneNumber: user.phoneNumber, code: "12345" })
+    ).resolves.toMatchObject({ user })
+  })
   it("treats a missing hasPassword as no password", async () => {
     vi.stubGlobal(
       "fetch",
@@ -110,6 +131,7 @@ describe("verifyOtp", () => {
       verifyOtp({ phoneNumber: "09123456789", code: "12345" })
     ).resolves.toEqual({
       hasPassword: false,
+      user: undefined,
       redirectTo: "/account",
     })
   })
@@ -129,6 +151,7 @@ describe("verifyOtp", () => {
       verifyOtp({ phoneNumber: "09123456789", code: "12345" })
     ).resolves.toEqual({
       hasPassword: true,
+      user: undefined,
       redirectTo: "/account",
     })
   })

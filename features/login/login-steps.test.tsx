@@ -217,6 +217,37 @@ describe("OtpStep", () => {
     expect(onSubmit).toHaveBeenCalledTimes(2)
   })
 
+  it("keeps a code usable when the cooldown ends without automatically submitting it again", () => {
+    const onSubmit = vi.fn((event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+    })
+    const onResend = vi.fn()
+    const props = {
+      phone: "09123456789",
+      otp: "12345",
+      error: "",
+      pending: false,
+      lockIn: 0,
+      devCode: "",
+      onOtpChange: vi.fn(),
+      onSubmit,
+      onResend,
+    }
+    const view = render(<OtpStep {...props} resendIn={1} />)
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+
+    view.rerender(<OtpStep {...props} resendIn={0} />)
+
+    const confirm = screen.getByRole("button", { name: "تایید کد" })
+    expect(confirm).toHaveProperty("disabled", false)
+    expect(otpInput().value).toBe("12345")
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+    expect(onResend).not.toHaveBeenCalled()
+
+    fireEvent.click(confirm)
+    expect(onSubmit).toHaveBeenCalledTimes(2)
+  })
+
   it("leaves focus alone while the attempt is still running", () => {
     renderOtp({ pending: true, error: "کد نادرست است." })
     const input = otpInput()

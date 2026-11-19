@@ -47,68 +47,98 @@ const credits: LedgerTransaction[] = [10_000, 14_000].map((amount, index) => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.mocked(listTransactions).mockResolvedValue(credits)
+  vi.mocked(listTransactions).mockResolvedValue({
+    transactions: credits,
+    hasNextPage: false,
+  })
   vi.mocked(listRefunds).mockResolvedValue([])
   vi.mocked(listWallets).mockResolvedValue([funded])
 })
 
 describe("WalletPanel refunds", () => {
-  it("offers each eligible credit instead of an arbitrary balance withdrawal", () => {
-    render(
-      <WalletPanel
-        initialWallets={[funded]}
-        initialTransactions={credits}
-        preview
-      />
-    )
-    expect(screen.queryByRole("button", { name: "برداشت وجه" })).toBeNull()
-    expect(
-      screen.getAllByRole("button", { name: "استرداد به کارت" })
-    ).toHaveLength(2)
-  })
-  it("does not offer a refund solely because the wallet has a positive balance", () => {
+  it("offers withdrawal for a positive balance without requiring credits", async () => {
     render(<WalletPanel initialWallets={[funded]} preview />)
-    expect(screen.queryByRole("button", { name: "استرداد به کارت" })).toBeNull()
-    expect(screen.queryByRole("button", { name: "برداشت وجه" })).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "برداشت وجه" }))
+    const dialog = await screen.findByRole("dialog", { name: "برداشت وجه" })
+    expect(within(dialog).getByRole("textbox", { name: /مبلغ/ })).toBeTruthy()
+    expect(
+      within(dialog).getByRole("textbox", { name: "شماره کارت" })
+    ).toBeTruthy()
   })
-  it("keeps the zero balance visible", () => {
-    render(
+
+  it("requests the next transaction page only when available", async () => {
+    vi.mocked(listTransactions).mockResolvedValueOnce({
+      transactions: credits,
+      hasNextPage: true,
+    })
+    render(<WalletPanel initialWallets={[funded]} />)
+    fireEvent.click(await screen.findByRole("button", { name: "صفحه بعد" }))
+    await waitFor(() => expect(listTransactions).toHaveBeenCalledWith(4, 2))
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: "صفحه بعد" }) as HTMLButtonElement)
+          .disabled
+      ).toBe(true)
+    )
+  })
+
+  it("hides withdrawal for a zero balance or non-owner", () => {
+    const { rerender } = render(
       <WalletPanel
         initialWallets={[{ ...funded, availableBalance: 0 }]}
         preview
       />
     )
-    expect(screen.getByText("۰ تومان")).toBeTruthy()
-  })
-  it("hides refund actions from a member", () => {
-    render(
+    expect(screen.queryByRole("button", { name: "برداشت وجه" })).toBeNull()
+    rerender(
       <WalletPanel
+        key="member"
         initialWallets={[{ ...funded, role: "member" }]}
-        initialTransactions={credits}
         preview
       />
     )
-    expect(screen.queryByRole("button", { name: "استرداد به کارت" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "برداشت وجه" })).toBeNull()
   })
-  it("submits the selected transaction ID with a fixed full amount", async () => {
+
+  it("sends team ID, rial amount and normalized card then refreshes wallet and history", async () => {
     render(<WalletPanel initialWallets={[funded]} />)
-    const buttons = await screen.findAllByRole("button", {
-      name: "استرداد به کارت",
-    })
-    fireEvent.click(buttons[1])
+    fireEvent.click(screen.getByRole("button", { name: "برداشت وجه" }))
     const dialog = await screen.findByRole("dialog")
-    expect(dialog.textContent).toContain("۱٬۴۰۰ تومان")
-    expect(within(dialog).queryByRole("textbox", { name: "مبلغ" })).toBeNull()
+    fireEvent.change(within(dialog).getByRole("textbox", { name: /مبلغ/ }), {
+      target: { value: "۱۵۰۰" },
+    })
+    fireEvent.change(
+      within(dialog).getByRole("textbox", { name: "شماره کارت" }),
+      { target: { value: "۵۰۲۲۲۹۱۲۳۴۵۶۵۹۹۵" } }
+    )
+    fireEvent.click(within(dialog).getByRole("button", { name: "ثبت درخواست" }))
+    await waitFor(() =>
+      expect(requestRefund).toHaveBeenCalledWith({
+        teamId: 4,
+        amount: 15000,
+        cardNumber: "5022291234565995",
+      })
+    )
+    await waitFor(() => expect(listWallets).toHaveBeenCalled())
+    await waitFor(() => expect(listTransactions).toHaveBeenCalledTimes(2))
+    expect(listRefunds).toHaveBeenCalledTimes(2)
+  })
+
+  it("rejects a withdrawal exceeding the available balance", async () => {
+    render(<WalletPanel initialWallets={[funded]} preview />)
+    fireEvent.click(screen.getByRole("button", { name: "برداشت وجه" }))
+    const dialog = await screen.findByRole("dialog")
+    fireEvent.change(within(dialog).getByRole("textbox", { name: /مبلغ/ }), {
+      target: { value: "2500" },
+    })
     fireEvent.change(
       within(dialog).getByRole("textbox", { name: "شماره کارت" }),
       { target: { value: "5022291234565995" } }
     )
     fireEvent.click(within(dialog).getByRole("button", { name: "ثبت درخواست" }))
-    await waitFor(() =>
-      expect(requestRefund).toHaveBeenCalledWith({
-        transactionId: 2,
-        cardNumber: "۵۰۲۲ ۲۹۱۲ ۳۴۵۶ ۵۹۹۵",
-      })
-    )
+    expect(
+      await within(dialog).findByText("مبلغ بیشتر از موجودی قابل برداشت است.")
+    ).toBeTruthy()
+    expect(requestRefund).not.toHaveBeenCalled()
   })
 })

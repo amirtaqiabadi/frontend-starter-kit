@@ -1,11 +1,16 @@
 "use client"
 
-import { useEffect, useState, useSyncExternalStore } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { LoaderCircleIcon } from "lucide-react"
 
-import { AvatarUploader } from "@/components/organisms/avatar-uploader/avatar-uploader"
+import { UserIcon } from "lucide-react"
+import {
+  getProfile,
+  updateProfileName,
+  ProfileApiError,
+} from "@/features/account/profile-api"
 import { FormField } from "@/components/molecules/form-field"
 import { Button } from "@/components/ui/button"
 import {
@@ -27,10 +32,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
-  readAccount,
-  saveAccount,
   signOutAccount,
-  subscribeAccount,
   type AccountProfile,
 } from "@/features/account/account-store"
 import { InviteFriends } from "@/features/account/invite-friends"
@@ -42,7 +44,7 @@ import { formatIranMobile } from "@/features/login/phone"
 import { loginPath } from "@/features/login/redirect-path"
 
 const fieldClassName = "h-11 text-base md:text-base"
-const MAX_NAME_LENGTH = 60
+const MAX_NAME_LENGTH = 80
 
 type AccountPreview = {
   wallets: Wallet[]
@@ -105,11 +107,38 @@ function PreviewAccount({
 function LiveAccount() {
   const router = useRouter()
   const session = useWalletSession()
-  const account = useSyncExternalStore(
-    subscribeAccount,
-    readAccount,
-    emptyAccount
-  )
+  const [account, setAccount] = useState<AccountProfile | null>(null)
+  const [inviteCode, setInviteCode] = useState<string | null>(null)
+  const [profileError, setProfileError] = useState("")
+  const [profileNonce, setProfileNonce] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    getProfile()
+      .then((profile) => {
+        if (!cancelled) {
+          setAccount({
+            phone: profile.phoneNumber,
+            name: profile.name ?? "",
+            avatarDataUrl: profile.avatarUrl ?? "",
+          })
+          setInviteCode(profile.token)
+        }
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        if (error instanceof ProfileApiError && error.status === 401) {
+          router.replace(loginPath("/account"))
+        } else {
+          setProfileError(
+            error instanceof Error ? error.message : "دریافت حساب انجام نشد."
+          )
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [router, profileNonce])
 
   useEffect(() => {
     if (session.status === "signed-out") {
@@ -129,7 +158,31 @@ function LiveAccount() {
     <AccountHome
       account={account}
       wallets={session.wallets}
-      onAccountChange={saveAccount}
+      inviteCode={profileError ? undefined : inviteCode}
+      profileFallback={
+        profileError ? (
+          <AccountError
+            message={profileError}
+            onRetry={() => {
+              setProfileError("")
+              setProfileNonce((value) => value + 1)
+            }}
+          />
+        ) : (
+          <Skeleton className="h-48" />
+        )
+      }
+      onAccountChange={async (next) => {
+        try {
+          const name = await updateProfileName(next.name)
+          setAccount({ ...next, name })
+        } catch (error) {
+          if (error instanceof ProfileApiError && error.status === 401) {
+            router.replace(loginPath("/account"))
+          }
+          throw error
+        }
+      }}
     />
   )
 }
@@ -138,42 +191,33 @@ function AccountHome({
   account,
   wallets,
   onAccountChange,
+  profileFallback,
+  inviteCode,
   preview = false,
 }: {
   account: AccountProfile | null
   wallets: Wallet[]
-  onAccountChange: (next: AccountProfile) => void
+  onAccountChange: (next: AccountProfile) => void | Promise<void>
+  profileFallback?: React.ReactNode
+  inviteCode?: string | null
   preview?: boolean
 }) {
   return (
     <div className="flex flex-col gap-6">
       {account ? (
         <ProfileForm account={account} onAccountChange={onAccountChange} />
-      ) : null}
+      ) : (
+        profileFallback
+      )}
       <WalletEntry wallets={wallets} />
-      <InviteFriends code={preview ? "A2C46" : undefined} />
+      {inviteCode === null && !preview ? (
+        <Skeleton className="h-64" />
+      ) : (
+        <InviteFriends code={preview ? "A2C46" : (inviteCode ?? undefined)} />
+      )}
       <SignOutButton preview={preview} />
     </div>
   )
-}
-
-/** Reads the optimized WebP into the data URL stored on the account. */
-function readOptimizedAvatar(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : ""
-      if (!result.startsWith("data:image/webp") || result.includes('"')) {
-        reject(new Error("invalid avatar"))
-        return
-      }
-      resolve(result)
-    }
-    reader.onerror = () => {
-      reject(new Error("invalid avatar"))
-    }
-    reader.readAsDataURL(file)
-  })
 }
 
 function ProfileForm({
@@ -181,50 +225,44 @@ function ProfileForm({
   onAccountChange,
 }: {
   account: AccountProfile
-  onAccountChange: (next: AccountProfile) => void
+  onAccountChange: (next: AccountProfile) => void | Promise<void>
 }) {
   const [name, setName] = useState(account.name)
-  const [avatarDataUrl, setAvatarDataUrl] = useState(account.avatarDataUrl)
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const [pending, setPending] = useState(false)
   useBlockUnload(pending)
 
-  function onOptimizedAvatar(file: File) {
-    void readOptimizedAvatar(file).then(
-      (nextAvatar) => {
-        setAvatarDataUrl(nextAvatar)
-        setNotice("")
-      },
-      () => {
-        setNotice("")
-      }
-    )
-  }
-
   const savedName = account.name.trim().slice(0, MAX_NAME_LENGTH)
   const draftName = name.trim().slice(0, MAX_NAME_LENGTH)
-  const dirty = draftName !== savedName || avatarDataUrl !== account.avatarDataUrl
+  const dirty = draftName !== savedName
 
-  function saveProfile(event: React.FormEvent<HTMLFormElement>) {
+  async function saveProfile(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (pending || !dirty) {
       return
     }
 
+    if (!draftName) {
+      setError("نام باید بین ۱ تا ۸۰ نویسه باشد.")
+      return
+    }
     setPending(true)
     setError("")
     setNotice("")
 
     try {
-      onAccountChange({
+      await onAccountChange({
         ...account,
         name: draftName,
-        avatarDataUrl,
       })
       setNotice("ذخیره شد")
-    } catch {
-      setError("ذخیره انجام نشد. دوباره تلاش کنید.")
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "ذخیره انجام نشد. دوباره تلاش کنید."
+      )
     } finally {
       setPending(false)
     }
@@ -240,16 +278,28 @@ function ProfileForm({
         onSubmit={saveProfile}
       >
         <CardContent className="flex flex-col gap-4">
-          <AvatarUploader
-            value={avatarDataUrl}
-            imageLabel={avatarLabel}
-            disabled={pending}
-            onChange={onOptimizedAvatar}
-            onRemove={() => {
-              setAvatarDataUrl("")
-              setNotice("")
-            }}
-          />
+          <div className="flex flex-col items-center gap-2">
+            <div
+              role="img"
+              aria-label={avatarLabel}
+              className="flex size-24 items-center justify-center overflow-hidden rounded-full bg-muted"
+            >
+              {account.avatarDataUrl ? (
+                // Avatar URLs are supplied by the profile API.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={account.avatarDataUrl}
+                  alt=""
+                  className="size-full object-cover"
+                />
+              ) : (
+                <UserIcon
+                  className="size-10 text-muted-foreground"
+                  aria-hidden
+                />
+              )}
+            </div>
+          </div>
           <FormField id="phone" label="شماره موبایل">
             <Input
               id="phone"
@@ -259,6 +309,7 @@ function ProfileForm({
               type="tel"
               autoComplete="tel"
               value={phone}
+              placeholder="شماره موبایل در دسترس نیست"
               disabled
             />
           </FormField>
@@ -285,7 +336,9 @@ function ProfileForm({
                   className="h-11 shrink-0"
                   disabled={pending}
                 >
-                  {pending ? <LoaderCircleIcon className="animate-spin" /> : null}
+                  {pending ? (
+                    <LoaderCircleIcon className="animate-spin" />
+                  ) : null}
                   {pending ? "در حال ذخیره" : "ذخیره"}
                 </Button>
               ) : null}
@@ -300,10 +353,6 @@ function ProfileForm({
       </form>
     </Card>
   )
-}
-
-function emptyAccount() {
-  return null
 }
 
 function WalletEntry({ wallets }: { wallets: Wallet[] }) {

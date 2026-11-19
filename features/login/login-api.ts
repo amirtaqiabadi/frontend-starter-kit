@@ -1,4 +1,5 @@
 import { apiPath } from "@/lib/api-path"
+import { parseUserProfile } from "@/features/account/profile-api"
 import { toPersianDigits } from "@/lib/digits"
 
 import { safeRedirectPath } from "@/features/login/redirect-path"
@@ -86,7 +87,7 @@ export async function loginWithPassword(input: {
     ...optionalNext(input.next),
   })
 
-  return { redirectTo: readRedirectTo(data) }
+  return { redirectTo: readRedirectTo(data), user: readUser(data) }
 }
 
 /** Requests a 5-digit login or reset code via SMS or voice call. */
@@ -130,8 +131,14 @@ export async function verifyOtp(input: {
 
   return {
     hasPassword: readValue(data, "hasPassword") === true,
+    user: readUser(data),
     redirectTo: readRedirectTo(data),
   }
+}
+
+/** Reads profile fields returned by a successful sign-in. */
+function readUser(data: unknown) {
+  return parseUserProfile(data)
 }
 
 /** Reads the signed-in user's invite token. `401` is signed out. */

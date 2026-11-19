@@ -63,7 +63,7 @@ const TRANSACTION_LABELS: Record<string, string> = {
   GatewayCredit: "افزایش موجودی",
   Reverse: "بازگشت به درگاه",
   Deposit: "واریز",
-  Refund: "استرداد",
+  Refund: "برداشت وجه",
 }
 
 const REFUND_STATUS_LABELS: Record<RefundStatus, string> = {
@@ -117,19 +117,6 @@ export function paymentFailureMessage(code: string) {
   )
 }
 
-/** True when a refund still blocks gateway reverse. */
-export function isOpenRefund(refund: CardRefund) {
-  return refund.status !== "rejected" && refund.status !== "failed"
-}
-
-/** Finds the refund stored for a ledger credit, if any. */
-export function refundForTransaction(
-  transactionId: number,
-  refunds: CardRefund[]
-) {
-  return refunds.find((row) => row.transactionId === transactionId)
-}
-
 /** True when this credit already has a Reverse row. */
 export function wasReversed(
   transaction: LedgerTransaction,
@@ -159,10 +146,9 @@ export function isWithinReverseWindow(createdAt: string, now = Date.now()) {
 export function canReverseCredit(input: {
   transaction: LedgerTransaction
   transactions: LedgerTransaction[]
-  refunds: CardRefund[]
   now?: number
 }) {
-  const { transaction, transactions, refunds, now } = input
+  const { transaction, transactions, now } = input
   if (transaction.type !== "GatewayCredit") {
     return false
   }
@@ -173,33 +159,7 @@ export function canReverseCredit(input: {
     return false
   }
 
-  const refund = refundForTransaction(transaction.id, refunds)
-  if (refund && isOpenRefund(refund)) {
-    return false
-  }
-
   return isWithinReverseWindow(transaction.createdAt, now)
-}
-
-/** Card refund is offered after the reverse window, for a credit with no refund. */
-export function canRequestRefund(input: {
-  transaction: LedgerTransaction
-  transactions: LedgerTransaction[]
-  refunds: CardRefund[]
-  now?: number
-}) {
-  const { transaction, transactions, refunds, now } = input
-  if (transaction.type !== "GatewayCredit") {
-    return false
-  }
-  if (wasReversed(transaction, transactions)) {
-    return false
-  }
-  if (refundForTransaction(transaction.id, refunds)) {
-    return false
-  }
-
-  return !isWithinReverseWindow(transaction.createdAt, now)
 }
 
 /** Narrows an unknown role; unknown values hide owner actions. */
