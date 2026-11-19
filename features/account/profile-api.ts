@@ -96,3 +96,78 @@ export async function updateProfileName(name: string): Promise<string> {
     throw new ProfileApiError("پاسخ سرور معتبر نیست.", 200)
   return data.name
 }
+
+export async function uploadAvatar(file: File): Promise<string> {
+  const cookie = document.cookie
+    .split("; ")
+    .find((part) => part.startsWith("csrf-token="))
+  const token = cookie
+    ? decodeURIComponent(cookie.slice("csrf-token=".length))
+    : ""
+  const body = new FormData()
+  body.append("file", file)
+  let response: Response
+  try {
+    response = await fetch(apiPath("/user/avatar"), {
+      method: "POST",
+      credentials: "include",
+      headers: { "x-csrf-token": token },
+      body,
+    })
+  } catch {
+    throw new ProfileApiError("ارتباط با سرور برقرار نشد. دوباره تلاش کنید.", 0)
+  }
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    const message =
+      response.status === 413
+        ? "حجم تصویر نباید بیشتر از ۵ مگابایت باشد."
+        : response.status === 503
+          ? "بارگذاری تصویر ناموفق بود. دوباره تلاش کنید."
+          : typeof data?.error?.message === "string"
+            ? data.error.message
+            : "بارگذاری تصویر ناموفق بود. دوباره تلاش کنید."
+    throw new ProfileApiError(message, response.status)
+  }
+  if (typeof data?.avatarUrl !== "string" || !data.avatarUrl) {
+    throw new ProfileApiError(
+      "پاسخ سرور معتبر نیست. دوباره تلاش کنید.",
+      response.status
+    )
+  }
+  return data.avatarUrl
+}
+
+export async function deleteAvatar(): Promise<void> {
+  const cookie = document.cookie
+    .split("; ")
+    .find((part) => part.startsWith("csrf-token="))
+  const token = cookie
+    ? decodeURIComponent(cookie.slice("csrf-token=".length))
+    : ""
+  let response: Response
+  try {
+    response = await fetch(apiPath("/user/avatar"), {
+      method: "DELETE",
+      credentials: "include",
+      headers: { "x-csrf-token": token },
+    })
+  } catch {
+    throw new ProfileApiError("ارتباط با سرور برقرار نشد. دوباره تلاش کنید.", 0)
+  }
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new ProfileApiError(
+      typeof data?.error?.message === "string"
+        ? data.error.message
+        : "حذف تصویر ناموفق بود. دوباره تلاش کنید.",
+      response.status
+    )
+  }
+  if (!data || data.avatarUrl !== null) {
+    throw new ProfileApiError(
+      "پاسخ سرور معتبر نیست. دوباره تلاش کنید.",
+      response.status
+    )
+  }
+}

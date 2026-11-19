@@ -5,12 +5,14 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { LoaderCircleIcon } from "lucide-react"
 
-import { UserIcon } from "lucide-react"
 import {
   getProfile,
   updateProfileName,
+  uploadAvatar,
+  deleteAvatar,
   ProfileApiError,
 } from "@/features/account/profile-api"
+import { AvatarUploader } from "@/components/organisms/avatar-uploader/avatar-uploader"
 import { FormField } from "@/components/molecules/form-field"
 import { Button } from "@/components/ui/button"
 import {
@@ -94,11 +96,25 @@ function PreviewAccount({
 }) {
   const [account, setAccount] = useState(initialAccount)
 
+  useEffect(() => {
+    const url = account.avatarDataUrl
+    return () => {
+      if (url.startsWith("blob:")) URL.revokeObjectURL(url)
+    }
+  }, [account.avatarDataUrl])
+
   return (
     <AccountHome
       account={account}
       wallets={wallets}
       onAccountChange={setAccount}
+      onAvatarUpload={async (file) => {
+        const url = URL.createObjectURL(file)
+        setAccount((current) => ({ ...current, avatarDataUrl: url }))
+      }}
+      onAvatarRemove={async () =>
+        setAccount((current) => ({ ...current, avatarDataUrl: "" }))
+      }
       preview
     />
   )
@@ -175,11 +191,36 @@ function LiveAccount() {
       onAccountChange={async (next) => {
         try {
           const name = await updateProfileName(next.name)
-          setAccount({ ...next, name })
+          setAccount((current) => (current ? { ...current, name } : current))
         } catch (error) {
           if (error instanceof ProfileApiError && error.status === 401) {
             router.replace(loginPath("/account"))
           }
+          throw error
+        }
+      }}
+      onAvatarUpload={async (file) => {
+        try {
+          const avatarUrl = await uploadAvatar(file)
+          setAccount((current) =>
+            current ? { ...current, avatarDataUrl: avatarUrl } : current
+          )
+        } catch (error) {
+          if (error instanceof ProfileApiError && error.status === 401) {
+            router.replace(loginPath("/account"))
+          }
+          throw error
+        }
+      }}
+      onAvatarRemove={async () => {
+        try {
+          await deleteAvatar()
+          setAccount((current) =>
+            current ? { ...current, avatarDataUrl: "" } : current
+          )
+        } catch (error) {
+          if (error instanceof ProfileApiError && error.status === 401)
+            router.replace(loginPath("/account"))
           throw error
         }
       }}
@@ -191,6 +232,8 @@ function AccountHome({
   account,
   wallets,
   onAccountChange,
+  onAvatarUpload,
+  onAvatarRemove,
   profileFallback,
   inviteCode,
   preview = false,
@@ -198,6 +241,8 @@ function AccountHome({
   account: AccountProfile | null
   wallets: Wallet[]
   onAccountChange: (next: AccountProfile) => void | Promise<void>
+  onAvatarUpload: (file: File) => Promise<void>
+  onAvatarRemove: () => Promise<void>
   profileFallback?: React.ReactNode
   inviteCode?: string | null
   preview?: boolean
@@ -205,7 +250,12 @@ function AccountHome({
   return (
     <div className="flex flex-col gap-6">
       {account ? (
-        <ProfileForm account={account} onAccountChange={onAccountChange} />
+        <ProfileForm
+          account={account}
+          onAccountChange={onAccountChange}
+          onAvatarUpload={onAvatarUpload}
+          onAvatarRemove={onAvatarRemove}
+        />
       ) : (
         profileFallback
       )}
@@ -223,15 +273,55 @@ function AccountHome({
 function ProfileForm({
   account,
   onAccountChange,
+  onAvatarUpload,
+  onAvatarRemove,
 }: {
   account: AccountProfile
   onAccountChange: (next: AccountProfile) => void | Promise<void>
+  onAvatarUpload: (file: File) => Promise<void>
+  onAvatarRemove: () => Promise<void>
 }) {
+  const [avatarPending, setAvatarPending] = useState(false)
+  const [avatarError, setAvatarError] = useState("")
   const [name, setName] = useState(account.name)
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const [pending, setPending] = useState(false)
-  useBlockUnload(pending)
+  useBlockUnload(pending || avatarPending)
+
+  async function selectAvatar(file?: File) {
+    if (!file || avatarPending) return
+    setAvatarError("")
+    setAvatarPending(true)
+    try {
+      await onAvatarUpload(file)
+    } catch (reason) {
+      setAvatarError(
+        reason instanceof Error
+          ? reason.message
+          : "بارگذاری تصویر ناموفق بود. دوباره تلاش کنید."
+      )
+    } finally {
+      setAvatarPending(false)
+    }
+  }
+
+  async function removeAvatar() {
+    if (avatarPending) return
+    setAvatarError("")
+    setAvatarPending(true)
+    try {
+      await onAvatarRemove()
+    } catch (reason) {
+      setAvatarError(
+        reason instanceof Error
+          ? reason.message
+          : "حذف تصویر ناموفق بود. دوباره تلاش کنید."
+      )
+    } finally {
+      setAvatarPending(false)
+    }
+  }
 
   const savedName = account.name.trim().slice(0, MAX_NAME_LENGTH)
   const draftName = name.trim().slice(0, MAX_NAME_LENGTH)
@@ -278,27 +368,31 @@ function ProfileForm({
         onSubmit={saveProfile}
       >
         <CardContent className="flex flex-col gap-4">
-          <div className="flex flex-col items-center gap-2">
-            <div
-              role="img"
-              aria-label={avatarLabel}
-              className="flex size-24 items-center justify-center overflow-hidden rounded-full bg-muted"
-            >
-              {account.avatarDataUrl ? (
-                // Avatar URLs are supplied by the profile API.
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={account.avatarDataUrl}
-                  alt=""
-                  className="size-full object-cover"
-                />
-              ) : (
-                <UserIcon
-                  className="size-10 text-muted-foreground"
-                  aria-hidden
-                />
-              )}
-            </div>
+          <div
+            className="flex flex-col items-center gap-2"
+            aria-busy={avatarPending}
+          >
+            <AvatarUploader
+              value={account.avatarDataUrl}
+              imageLabel={avatarLabel}
+              disabled={avatarPending}
+              onChange={(file) => {
+                void selectAvatar(file)
+              }}
+              onRemove={() => {
+                void removeAvatar()
+              }}
+            />
+            {avatarPending ? (
+              <p role="status" className="text-sm text-muted-foreground">
+                در حال ارسال درخواست
+              </p>
+            ) : null}
+            {avatarError ? (
+              <p role="alert" className="text-center text-sm text-destructive">
+                {avatarError}
+              </p>
+            ) : null}
           </div>
           <FormField id="phone" label="شماره موبایل">
             <Input
